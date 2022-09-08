@@ -14,6 +14,8 @@ use ya_raycaster::get_deltas;
 use ya_raycaster::draw_rays;
 
 const BLACK: sdl2::pixels::Color = sdl2::pixels::Color::RGB(0, 0, 0);
+const BLUE: sdl2::pixels::Color =  sdl2::pixels::Color::RGB(0, 0, 30);
+
 
 const WINDOW_HEIGHT: u32 = 512;
 const WINDOW_WIDTH: u32 = 1024;
@@ -22,9 +24,9 @@ pub fn main() {
     let mut main_player = Player{
         pos_x: 256.0,
         pos_y: 256.0,
-        angle: 90,
-        dir_x: get_deltas(90).0,
-        dir_y: get_deltas(90).1,
+        angle: 60,
+        dir_x: get_deltas(60).0,
+        dir_y: get_deltas(60).1,
     };
 
     let game_map: [[i32; 8]; 8] = [
@@ -63,15 +65,15 @@ pub fn main() {
             }
         }
         // Resets screen to black, if not hall of mirrors effect will be displayed
-        canvas.set_draw_color(BLACK);
+        canvas.set_draw_color(BLUE);
         canvas.clear();
         // ** //
 
 
         move_player(&event_pump, &mut main_player, &game_map);
+        let (ray_distances, ray_hit_sides) = get_rays(&main_player, &game_map, &mut canvas);
         draw_2d_world(&mut canvas, &main_player, &game_map);
-        let ray_distances = get_rays(&main_player, &game_map, &mut canvas);
-        draw_rays(&mut canvas, ray_distances);
+        draw_rays(&mut canvas, ray_distances, ray_hit_sides);
         //println!("{:?}", ray_distances);
 
         // Put changes to the screen

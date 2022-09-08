@@ -28,6 +28,7 @@ const RAY_STEP: f32 = 0.05;
 const RAY_COUNT: usize = 60;
 const PI_VALUE: f32 = std::f64::consts::PI as f32;
 
+const ONE_DEG_IN_RAD: f32 = 57.2958;
 
 pub struct Player{
     pub pos_x: f32, // X position
@@ -97,18 +98,19 @@ pub fn draw_2d_world(canvas: &mut Canvas<Window>, player: &Player, game_map: &[[
     canvas.set_draw_color(RED);
     canvas.fill_rect(Rect::new(player.pos_x as i32 - 4, player.pos_y as i32 - 4, 8, 8)).expect("Couldn't draw player");
     canvas.thick_line((player.pos_x + player.dir_x * 20_f32) as i16, (player.pos_y + player.dir_y * 20_f32) as i16,
-                      (player.pos_x) as i16, (player.pos_y) as i16, 2, GREEN)
+                      (player.pos_x) as i16, (player.pos_y) as i16, 2, RED)
                       .expect("Couldn't draw the direction pointer");
 
 
 }
 
-pub fn draw_rays(canvas: &mut Canvas<Window>, ray_distances: [f32; RAY_COUNT]){
+pub fn draw_rays(canvas: &mut Canvas<Window>, ray_distances: [f32; RAY_COUNT], ray_hit_sides: [i32; RAY_COUNT]){
     let mut x_pos: i16 = WINDOW_WIDTH as i16;
-    for (_, wall_distance) in ray_distances.iter().enumerate(){
+    for (idx, wall_distance) in ray_distances.iter().enumerate(){
+        let mut line_color = GREEN;
         x_pos -= 8;
-        let line_height =(BLOCKSIZE as f32 * WINDOW_HEIGHT) / wall_distance;
-        println!("line height {}", line_height);
+        let line_height = (BLOCKSIZE as f32 * WINDOW_HEIGHT) / wall_distance;
+        //println!("line height {}", line_height);
         let mut line_start = (-line_height / 2_f32) + (WINDOW_HEIGHT / 2_f32);
         if line_start < 0_f32 { 
             line_start = 0_f32;
@@ -117,55 +119,120 @@ pub fn draw_rays(canvas: &mut Canvas<Window>, ray_distances: [f32; RAY_COUNT]){
         if line_end >= WINDOW_HEIGHT{
             line_end = WINDOW_HEIGHT - 1_f32;
         }
+        if ray_hit_sides[idx] == 1{
+            line_color = DARK_GREEN;
+        }
         canvas.thick_line((x_pos) as i16, (line_end) as i16,
-        (x_pos) as i16, (line_start) as i16, 8, GREEN)
+        (x_pos) as i16, (line_start) as i16, 8, line_color)
         .expect("Couldn't draw the ray");
     }
 }
 
 
 
-pub fn get_rays(player: &Player, game_map: &[[i32; 8]; 8], canvas: &mut Canvas<Window>) -> [f32; RAY_COUNT]{
+pub fn get_rays(player: &Player, game_map: &[[i32; 8]; 8], canvas: &mut Canvas<Window>) -> ([f32; RAY_COUNT], [i32; RAY_COUNT]){
     let mut ray_distances: [f32; RAY_COUNT] = [0_f32; RAY_COUNT]; 
-    let orig_pos_x = player.pos_x;
-    let orig_pos_y = player.pos_y;
+    let mut ray_hit_sides: [i32; RAY_COUNT] = [0; RAY_COUNT]; // 0 horizontal, 1 vertical
+    let player_x = player.pos_x;
+    let player_y = player.pos_y;
     let player_angle = player.angle;
     // ** //
-    let mut current_x = player.pos_x;
-    let mut current_y = player.pos_y;
-    let mut ray_angle = player.angle - (RAY_COUNT as i32 / 2);
+    let mut current_x: f32 = player_x;
+    let mut current_y: f32 = player_y;
+    let mut ray_angle: i32 = player.angle - (RAY_COUNT as i32 / 2);
     let mut array_idx: usize = 0;
-    loop{
-        let player_dir_x;
-        let player_dir_y;
-        (player_dir_x, player_dir_y) = get_deltas(ray_angle);
+
+    loop {
+        let mut horizontal_hit_pos: (f32, f32) = (-1_f32, -1_f32);
+        let mut vertical_hit_pos: (f32, f32) = (-1_f32, -1_f32);
+        let mut horizontal_distance: f32 = 9999_f32;
+        let mut vertical_distance: f32 = 9999_f32;
+        let mut x_step: f32 = -1_f32;
+        let mut y_step: f32 = -1_f32;
+        
+        // Horizontal Check
+        if ray_angle >= 0 && ray_angle <= 180 { // facing up
+            y_step = -(BLOCKSIZE as f32);
+            current_y = (player_y/64_f32).floor() * (64_f32) - 1_f32;
+            x_step = BLOCKSIZE as f32 / (ray_angle as f32).to_radians().tan();
+        }
+        if ray_angle > 180 && ray_angle < 360 { // facing down
+            y_step = BLOCKSIZE as f32;
+            current_y = (player_y/64_f32).floor() * (64_f32) + 64_f32;
+            x_step = ( BLOCKSIZE as f32 / (ray_angle as f32).to_radians().tan() )* -1_f32;
+        }
+        current_x = player_x + (player_y - current_y)/(ray_angle as f32).to_radians().tan();
+        canvas.draw_point((current_x as i32, current_y as i32));
         'inner: loop{
-            current_y += player_dir_y * RAY_STEP;
-            current_x += player_dir_x * RAY_STEP;
-            //println!("Current angle {}, dir_x {}, dir_y {}", player_angle, player_dir_x, player_dir_y);
+            //println!("HORIZONTAL-> player_angle {}, player_x {}, player_y {}, x_step {}, y_step {}, start_x {}, start_y {}", player_angle,player_x, player_y, x_step, y_step, current_x, current_y);
             let idx_y = (current_x / BLOCKSIZE as f32) as usize; // THESE TWO ARE CORRECT
             let idx_x = (current_y / BLOCKSIZE as f32) as usize; // DUE TO HOW SDL2 HANDLES X/Y AXIS'
-
+            if idx_y >= 8 || idx_x >= 8 {break 'inner};
             if game_map[idx_x][idx_y] == 1{
-                let distance = get_distance((orig_pos_x, orig_pos_y), (current_x, current_y));
-                ray_distances[array_idx] = fix_fisheye(player_angle, ray_angle, distance);
-                array_idx += 1;
-                canvas.thick_line((current_x) as i16, (current_y) as i16,
-                (orig_pos_x) as i16, (orig_pos_y) as i16, 2, GREEN)
-                .expect("Couldn't draw the ray");
+                horizontal_distance = get_distance((player_x, player_y), (current_x, current_y));
+                horizontal_hit_pos = (current_x, current_y);
                 break 'inner;
             }
+            current_x += x_step;
+            current_y += y_step;
+        }
+                
+        // Horizontal Check end
+
+        // Vertical Check
+        if ray_angle >= 90 && ray_angle <= 270 { // ray facing left
+            x_step = -1_f32 * (BLOCKSIZE as f32);
+            y_step = BLOCKSIZE as f32 * (ray_angle as f32).to_radians().tan();
+            current_x = (player_x/64_f32).floor() * (64_f32) - 1_f32;
+        }
+        if ray_angle >= 270 || ray_angle <= 90 { // ray facing right
+            x_step = BLOCKSIZE as f32;
+            y_step = -(BLOCKSIZE as f32 * (ray_angle as f32).to_radians().tan());
+            current_x = (player_x/64_f32).floor() * (64_f32) + 64_f32;
+
+        }
+        current_y = player_y + (player_x - current_x)*(ray_angle as f32).to_radians().tan();
+        'inner: loop{
+            //println!("VERTICAL-> player_angle {}, player_x {}, player_y {}, x_step {}, y_step {}, start_x {}, start_y {}", player_angle,player_x, player_y, x_step, y_step, current_x, current_y);
+            let idx_y = (current_x / BLOCKSIZE as f32) as usize; // THESE TWO ARE CORRECT
+            let idx_x = (current_y / BLOCKSIZE as f32) as usize; // DUE TO HOW SDL2 HANDLES X/Y AXIS'
+            if idx_y >= 8 || idx_x >= 8 {break 'inner};
+            if game_map[idx_x][idx_y] == 1{
+                vertical_distance = get_distance((player_x, player_y), (current_x, current_y));
+                vertical_hit_pos = (current_x, current_y);
+                break 'inner;
+            }
+            current_x += x_step;
+            current_y += y_step;
+        }
+        // Vertical Check end
+
+
+        if horizontal_distance < vertical_distance{
+            ray_distances[array_idx] = fix_fisheye(player_angle, ray_angle, horizontal_distance);
+            ray_hit_sides[array_idx] = 0;
+            canvas.thick_line((horizontal_hit_pos.0) as i16, (horizontal_hit_pos.1) as i16,
+            (player_x) as i16, (player_y) as i16, 2, GREEN)
+            .expect("Couldn't draw the ray");
+        }
+        else {
+            ray_distances[array_idx] = fix_fisheye(player_angle, ray_angle, vertical_distance);
+            ray_hit_sides[array_idx] = 1;
+            canvas.thick_line((vertical_hit_pos.0) as i16, (vertical_hit_pos.1) as i16,
+            (player_x) as i16, (player_y) as i16, 2, GREEN)
+            .expect("Couldn't draw the ray");
         }
         ray_angle += 1;
         ray_angle = normalize_angle(ray_angle);
-        current_x = orig_pos_x;
-        current_y = orig_pos_y;
+        array_idx += 1;
         if array_idx == RAY_COUNT{
-            return ray_distances;
+            return (ray_distances, ray_hit_sides);
         }
-        
-    }
+        }
+
+
 }
+
 
 /// Fixes the fisheye effect caused by get_distance function
 fn fix_fisheye(player_angle: i32, current_angle: i32, distance: f32) -> f32{
@@ -229,6 +296,5 @@ mod tests {
         let point1 = (7_f32, 5_f32);
         let point2 = (11_f32, 8_f32);
         assert_eq!(get_distance(point1, point2), 5_f32);
-
     }
 }
