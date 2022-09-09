@@ -51,10 +51,22 @@ pub fn move_player(e: &sdl2::EventPump, player: &mut Player, game_map: &[[i32; 8
     if pressed_keys.contains(&Scancode::W){
         player.pos_y += player.dir_y * PLAYER_SPEED;
         player.pos_x += player.dir_x * PLAYER_SPEED;
+        let idx_y = (player.pos_x / BLOCKSIZE as f32) as usize; // THESE TWO ARE CORRECT
+        let idx_x = (player.pos_y / BLOCKSIZE as f32) as usize; // DUE TO HOW SDL2 HANDLES X/Y AXIS'
+        if game_map[idx_x][idx_y] == 1{
+            player.pos_y -= player.dir_y * PLAYER_SPEED;
+            player.pos_x -= player.dir_x * PLAYER_SPEED;
+        }
     }
     else if pressed_keys.contains(&Scancode::S){
         player.pos_y -= player.dir_y * PLAYER_SPEED;
         player.pos_x -= player.dir_x * PLAYER_SPEED;
+        let idx_y = (player.pos_x / BLOCKSIZE as f32) as usize; // THESE TWO ARE CORRECT
+        let idx_x = (player.pos_y / BLOCKSIZE as f32) as usize; // DUE TO HOW SDL2 HANDLES X/Y AXIS'
+        if game_map[idx_x][idx_y] == 1{
+            player.pos_y += player.dir_y * PLAYER_SPEED;
+            player.pos_x += player.dir_x * PLAYER_SPEED;
+        }
     }
     else if pressed_keys.contains(&Scancode::A){
         player.angle += ROTATION_SPEED;
