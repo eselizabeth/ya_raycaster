@@ -153,15 +153,14 @@ pub fn draw_rays(canvas: &mut Canvas<Window>, rays: [Ray; RAY_COUNT], textures: 
         if ray.hit_side == 1{
             texture = &textures[1];
         }
-        //println!("line_start {}, line_end {}, line_height {}", line_start as i32, line_end as i32, line_height as u32);
-        // pub fn new(x: i32, y: i32, width: u32, height: u32) -> Rect
+
+        // In case the line height is bigger than screen normalize it
+        if line_height > WINDOW_HEIGHT as f32{
+           line_start = (WINDOW_HEIGHT as f32 - line_height) / 2.0;
+        }
         let buffer = Rect::new(ray.pos_x, 0, 8, line_height as u32); // src
-        //let position = Rect::new(500, line_end as i32 - 10 , 8, 100); // dst
         let position = Rect::new(x_pos as i32, line_start as i32, 8, line_height as u32); // dst
         canvas.copy(&texture, buffer, position);
-        // if idx == 0{
-        //     break;
-        // }
     }
 }
 
@@ -244,7 +243,7 @@ pub fn get_rays(player: &Player, game_map: &[[i32; 8]; 8], canvas: &mut Canvas<W
         if horizontal_distance < vertical_distance{
             current_ray.distance = fix_fisheye(player_angle, ray_angle, horizontal_distance);
             current_ray.hit_side = 0;
-            current_ray.pos_x = (horizontal_hit_pos.0 as u32 % BLOCKSIZE) as i32;
+            current_ray.pos_x = (horizontal_hit_pos.0.floor() as u32 % BLOCKSIZE) as i32;
             canvas.thick_line((horizontal_hit_pos.0) as i16, (horizontal_hit_pos.1) as i16,
             (player_x) as i16, (player_y) as i16, 2, GREEN)
             .expect("Couldn't draw the ray");
@@ -252,7 +251,7 @@ pub fn get_rays(player: &Player, game_map: &[[i32; 8]; 8], canvas: &mut Canvas<W
         else if vertical_distance < horizontal_distance{
             current_ray.distance = fix_fisheye(player_angle, ray_angle, vertical_distance);
             current_ray.hit_side = 1;
-            current_ray.pos_x = (horizontal_hit_pos.0 as u32 % BLOCKSIZE) as i32;
+            current_ray.pos_x = (horizontal_hit_pos.0.floor() as u32 % BLOCKSIZE) as i32;
             canvas.thick_line((vertical_hit_pos.0) as i16, (vertical_hit_pos.1) as i16,
             (player_x) as i16, (player_y) as i16, 2, RED)
             .expect("Couldn't draw the ray");
