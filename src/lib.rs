@@ -1,6 +1,6 @@
 use std::fmt;
 use std::collections::HashSet;
-
+use std::time::Duration;
 use sdl2::pixels::Color;
 use sdl2::rect::Rect;
 use sdl2::video::Window;
@@ -30,6 +30,8 @@ pub const BLOCKSIZE: u32 = 64;
 const PLAYER_SPEED: f32 = 4.0;
 const ROTATION_SPEED: f32 = 4.0;
 const RAY_COUNT: usize = 60; // Ray Count must be even
+const BULLET_SPEED: f32 = 4.0;
+
 
 
 
@@ -136,7 +138,7 @@ pub fn draw_2d_world(canvas: &mut Canvas<Window>, player: &Player, game_map: map
 }
 
 // Draws the 2.5D world
-pub fn draw_rays(canvas: &mut Canvas<Window>, rays: [Ray; RAY_COUNT], textures: &mut[Texture; 2]){
+pub fn draw_rays(canvas: &mut Canvas<Window>, rays: [Ray; RAY_COUNT], texture_gun: &Texture<'_>, textures: &mut[Texture; 2]){
     let mut x_pos: i16 = WINDOW_WIDTH as i16;
     for (_, ray) in rays.iter().enumerate(){
         x_pos -= 8;
@@ -166,6 +168,10 @@ pub fn draw_rays(canvas: &mut Canvas<Window>, rays: [Ray; RAY_COUNT], textures: 
         let position = Rect::new(x_pos as i32, line_start as i32, 8, line_height as u32); // dst
         canvas.copy(&texture, buffer, position).expect("Couldn't draw the ray");
     }
+    // Drawing the gun
+    let gun = Rect::new(0, 0, 256, 128); // src
+    let position = Rect::new(512 + 128, 512 - 128, 256, 128); // dst
+    canvas.copy(&texture_gun, gun, position).expect("Couldn't draw the ray");
 }
 
 
@@ -267,6 +273,37 @@ pub fn get_rays(player: &Player, game_map: map::GameMap, canvas: &mut Canvas<Win
             return rays;
         }
         }
+}
+
+pub fn fire(player: &Player, game_map: map::GameMap) -> Vec<Rect>{
+    let mut bullets: Vec<Rect> = Vec::new();
+    let mut bullet_x = player.pos_x;
+    let mut bullet_y = player.pos_y;
+    let mut drawing_x_pos = 512 + 235;
+    let mut drawing_y_pos = 512-120;
+    let mut height: i32 = 64;
+    let mut width: i32 = 64;
+    loop {
+        bullet_x += player.dir_x * BULLET_SPEED;
+        bullet_y += player.dir_y * BULLET_SPEED;
+        let idx_y: usize = bullet_x as usize / BLOCKSIZE as usize; // THESE TWO ARE CORRECT
+        let idx_x: usize = bullet_y as usize / BLOCKSIZE as usize; // DUE TO HOW SDL2 HANDLES X/Y AXIS'
+        if {(bullet_x.abs() > WINDOW_WIDTH as f32 || bullet_y.abs() > WINDOW_HEIGHT as f32)
+            || game_map.walls[idx_x][idx_y] == 1} 
+        {
+            bullets.reverse();
+            return bullets;
+        }
+        else{
+            let position = Rect::new(drawing_x_pos, drawing_y_pos, width as u32, height as u32); // dst
+            bullets.push(position);
+        }
+        drawing_x_pos += 2;
+        width -= 5;
+        height -= 5;
+        drawing_y_pos -= 10;
+    }
+
 }
 
 
