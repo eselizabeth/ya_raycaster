@@ -5,6 +5,9 @@ use sdl2::keyboard::Keycode;
 use std::time::Duration;
 use sdl2::render::Canvas;
 use sdl2::video::Window;
+use sdl2::render::TextureCreator;
+use sdl2::image::LoadTexture;
+use sdl2::rect::Rect;
 
 use ya_raycaster::*;
 
@@ -21,7 +24,7 @@ pub fn main() {
         [1, 1, 1, 1, 1, 1, 1, 1, ],
         [1, 0, 0, 0, 0, 0, 1, 1, ],
         [1, 0, 0, 0, 0, 0, 0, 1, ],
-        [1, 0, 1, 0, 0, 1, 0, 1, ],
+        [1, 0, 0, 0, 0, 1, 0, 1, ],
         [1, 0, 1, 0, 0, 1, 0, 1, ],
         [1, 0, 1, 0, 0, 1, 0, 1, ],
         [1, 0, 0, 0, 0, 1, 0, 1, ],
@@ -40,7 +43,11 @@ pub fn main() {
         .unwrap();
 
     let mut canvas: Canvas<Window> = window.into_canvas().target_texture().present_vsync().build().unwrap();
-
+    let texture_creator = canvas.texture_creator();
+    let mut game_textures: [sdl2::render::Texture; 2] = [
+        texture_creator.load_texture("texture_1.png").expect("Couldn't load texture"),
+        texture_creator.load_texture("texture_1_dark.png").expect("Couldn't load texture"),
+    ];
     let mut event_pump = sdl_context.event_pump().unwrap();
     'running: loop {
         for event in event_pump.poll_iter() {
@@ -59,10 +66,9 @@ pub fn main() {
 
 
         move_player(&event_pump, &mut main_player, &game_map);
-        let (ray_distances, ray_hit_sides) = get_rays(&main_player, &game_map, &mut canvas);
+        let rays = get_rays(&main_player, &game_map, &mut canvas);
         draw_2d_world(&mut canvas, &main_player, &game_map);
-        draw_rays(&mut canvas, ray_distances, ray_hit_sides);
-
+        draw_rays(&mut canvas, rays, &mut game_textures);
         // Put changes to the screen
         canvas.present();
         ::std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));

@@ -8,6 +8,7 @@ use sdl2::video::Window;
 use sdl2::render::Canvas;
 use sdl2::keyboard::Scancode;
 use sdl2::gfx::primitives::DrawRenderer;
+use sdl2::render::Texture;
 
 pub const WINDOW_HEIGHT: u32 = 512;
 pub const WINDOW_WIDTH: u32 = 1024;
@@ -27,16 +28,34 @@ pub const BLUE: Color =  Color::RGB(0, 0, 255);
 
 pub const BLOCKSIZE: u32 = 64;
 const PLAYER_SPEED: f32 = 4.0;
-const ROTATION_SPEED: f32 = 2.0;
+const ROTATION_SPEED: f32 = 4.0;
 const RAY_COUNT: usize = 60; // Ray Count must be even
 
-
+#[derive(Debug, Copy, Clone)]
 pub struct Player{
     pub pos_x: f32, // X position
     pub pos_y: f32, // Y position
     pub angle: f32, // Player angle
     pub dir_x: f32, // Delta X
     pub dir_y: f32, // Delta Y
+
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct Ray{
+    pub distance: f32, // distance between the player and where the ray hit
+    pub hit_side: i32, // where the ray hit, 0 if horizontal, 1 if vertical
+    pub pos_x: i32, // x position of ray hit
+}
+
+impl Ray{
+    fn new() -> Ray{
+        Ray{
+            distance: -1.0,
+            hit_side: -1,
+            pos_x: -1,
+        }
+    }
 
 }
 
@@ -69,7 +88,7 @@ pub fn move_player(e: &sdl2::EventPump, player: &mut Player, game_map: &[[i32; 8
             player.pos_x += player.dir_x * PLAYER_SPEED;
         }
     }
-    else if pressed_keys.contains(&Scancode::A){
+    if pressed_keys.contains(&Scancode::A){
         player.angle += ROTATION_SPEED;
         player.angle = normalize_angle(player.angle);
         (player.dir_x, player.dir_y) = get_deltas(player.angle);
@@ -113,17 +132,15 @@ pub fn draw_2d_world(canvas: &mut Canvas<Window>, player: &Player, game_map: &[[
     canvas.thick_line((player.pos_x + player.dir_x * 20_f32) as i16, (player.pos_y + player.dir_y * 20_f32) as i16,
                       (player.pos_x) as i16, (player.pos_y) as i16, 2, RED)
                       .expect("Couldn't draw the direction pointer");
-
-
 }
 
 // Draws the 2.5D world
-pub fn draw_rays(canvas: &mut Canvas<Window>, ray_distances: [f32; RAY_COUNT], ray_hit_sides: [i32; RAY_COUNT]){
+pub fn draw_rays(canvas: &mut Canvas<Window>, rays: [Ray; RAY_COUNT], textures: &mut[Texture; 2]){
     let mut x_pos: i16 = WINDOW_WIDTH as i16;
-    for (idx, wall_distance) in ray_distances.iter().enumerate(){
+    for (idx, ray) in rays.iter().enumerate(){
         let mut line_color = GREEN;
         x_pos -= 8;
-        let line_height = (BLOCKSIZE * WINDOW_HEIGHT) as f32 / wall_distance;
+        let line_height = (BLOCKSIZE * WINDOW_HEIGHT) as f32 / ray.distance;
         let mut line_start = (-line_height / 2_f32) + (WINDOW_HEIGHT / 2) as f32;
         if line_start < 0_f32 { 
             line_start = 0_f32;
@@ -132,20 +149,26 @@ pub fn draw_rays(canvas: &mut Canvas<Window>, ray_distances: [f32; RAY_COUNT], r
         if line_end >= WINDOW_HEIGHT as f32{
             line_end = (WINDOW_HEIGHT - 1) as f32;
         }
-        if ray_hit_sides[idx] == 1{
-            line_color = DARK_GREEN;
+        let mut texture = &textures[0];
+        if ray.hit_side == 1{
+            texture = &textures[1];
         }
-        canvas.thick_line((x_pos) as i16, (line_end) as i16,
-        (x_pos) as i16, (line_start) as i16, 8, line_color)
-        .expect("Couldn't draw the ray");
+        //println!("line_start {}, line_end {}, line_height {}", line_start as i32, line_end as i32, line_height as u32);
+        // pub fn new(x: i32, y: i32, width: u32, height: u32) -> Rect
+        let buffer = Rect::new(ray.pos_x, 0, 8, line_height as u32); // src
+        //let position = Rect::new(500, line_end as i32 - 10 , 8, 100); // dst
+        let position = Rect::new(x_pos as i32, line_start as i32, 8, line_height as u32); // dst
+        canvas.copy(&texture, buffer, position);
+        // if idx == 0{
+        //     break;
+        // }
     }
 }
 
 
 /// Returns the ray distance(s) and the side(s) they were hit
-pub fn get_rays(player: &Player, game_map: &[[i32; 8]; 8], canvas: &mut Canvas<Window>) -> ([f32; RAY_COUNT], [i32; RAY_COUNT]){
-    let mut ray_distances: [f32; RAY_COUNT] = [0_f32; RAY_COUNT]; 
-    let mut ray_hit_sides: [i32; RAY_COUNT] = [0; RAY_COUNT]; // 0 horizontal, 1 vertical
+pub fn get_rays(player: &Player, game_map: &[[i32; 8]; 8], canvas: &mut Canvas<Window>) -> [Ray; RAY_COUNT]{
+    let mut rays: [Ray; RAY_COUNT] = [Ray::new(); RAY_COUNT]; 
     let player_x = player.pos_x;
     let player_y = player.pos_y;
     let player_angle = player.angle;
@@ -209,31 +232,36 @@ pub fn get_rays(player: &Player, game_map: &[[i32; 8]; 8], canvas: &mut Canvas<W
             if game_map[(current_y as usize/64)][current_x as usize/64 as usize] == 1{
                 vertical_distance = get_distance(player_x, player_y, current_x, current_y, ray_angle);
                 vertical_hit_pos = (current_x, current_y);
+                
                 break 'inner;
             }
             current_x += x_step;
             current_y += y_step;
         }
         // Vertical Check end //
+        let mut current_ray = Ray::new();
 
         if horizontal_distance < vertical_distance{
-            ray_distances[array_idx] = fix_fisheye(player_angle, ray_angle, horizontal_distance);
-            ray_hit_sides[array_idx] = 0;
+            current_ray.distance = fix_fisheye(player_angle, ray_angle, horizontal_distance);
+            current_ray.hit_side = 0;
+            current_ray.pos_x = (horizontal_hit_pos.0 as u32 % BLOCKSIZE) as i32;
             canvas.thick_line((horizontal_hit_pos.0) as i16, (horizontal_hit_pos.1) as i16,
             (player_x) as i16, (player_y) as i16, 2, GREEN)
             .expect("Couldn't draw the ray");
         }
         else if vertical_distance < horizontal_distance{
-            ray_distances[array_idx] = fix_fisheye(player_angle, ray_angle, vertical_distance);
-            ray_hit_sides[array_idx] = 1;
+            current_ray.distance = fix_fisheye(player_angle, ray_angle, vertical_distance);
+            current_ray.hit_side = 1;
+            current_ray.pos_x = (horizontal_hit_pos.0 as u32 % BLOCKSIZE) as i32;
             canvas.thick_line((vertical_hit_pos.0) as i16, (vertical_hit_pos.1) as i16,
             (player_x) as i16, (player_y) as i16, 2, RED)
             .expect("Couldn't draw the ray");
         }
+        rays[array_idx] = current_ray;
         ray_angle += 1.0;
         array_idx += 1;
         if array_idx == RAY_COUNT{
-            return (ray_distances, ray_hit_sides);
+            return rays;
         }
         }
 }
