@@ -1,5 +1,4 @@
 extern crate sdl2;
-
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
 use std::time::Duration;
@@ -10,6 +9,7 @@ use sdl2::image::LoadTexture;
 use sdl2::rect::Rect;
 
 use ya_raycaster::*;
+pub mod map;
 
 pub fn main() {
     let mut main_player = Player{
@@ -19,20 +19,6 @@ pub fn main() {
         dir_x: get_deltas(60.0).0,
         dir_y: get_deltas(60.0).1,
     };
-
-    let game_map: [[i32; MAP_LENGTH]; MAP_WIDTH] = [
-        [1, 1, 1, 1, 1, 1, 1, 1, ],
-        [1, 0, 0, 0, 0, 0, 1, 1, ],
-        [1, 0, 0, 0, 0, 0, 0, 1, ],
-        [1, 0, 0, 0, 0, 1, 0, 1, ],
-        [1, 0, 1, 0, 0, 1, 0, 1, ],
-        [1, 0, 1, 0, 0, 1, 0, 1, ],
-        [1, 0, 0, 0, 0, 1, 0, 1, ],
-        [1, 1, 1, 1, 1, 1, 1, 1, ],
-
-
-    ];
-
 
     let sdl_context = sdl2::init().unwrap();
     let video_subsystem = sdl_context.video().unwrap();
@@ -65,9 +51,9 @@ pub fn main() {
         // ** //
 
 
-        move_player(&event_pump, &mut main_player, &game_map);
-        let rays = get_rays(&main_player, &game_map, &mut canvas);
-        draw_2d_world(&mut canvas, &main_player, &game_map);
+        move_player(&event_pump, &mut main_player, ya_raycaster::map::GAME_MAP);
+        let rays = get_rays(&main_player, ya_raycaster::map::GAME_MAP, &mut canvas);
+        draw_2d_world(&mut canvas, &main_player, ya_raycaster::map::GAME_MAP);
         draw_rays(&mut canvas, rays, &mut game_textures);
         // Put changes to the screen
         canvas.present();

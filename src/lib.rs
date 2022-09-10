@@ -1,4 +1,3 @@
-
 use std::fmt;
 use std::collections::HashSet;
 
@@ -9,6 +8,7 @@ use sdl2::render::Canvas;
 use sdl2::keyboard::Scancode;
 use sdl2::gfx::primitives::DrawRenderer;
 use sdl2::render::Texture;
+pub mod map;
 
 pub const WINDOW_HEIGHT: u32 = 512;
 pub const WINDOW_WIDTH: u32 = 1024;
@@ -30,6 +30,8 @@ pub const BLOCKSIZE: u32 = 64;
 const PLAYER_SPEED: f32 = 4.0;
 const ROTATION_SPEED: f32 = 4.0;
 const RAY_COUNT: usize = 60; // Ray Count must be even
+
+
 
 #[derive(Debug, Copy, Clone)]
 pub struct Player{
@@ -66,14 +68,14 @@ impl fmt::Display for Player {
 }
 
 /// Moves the player according to pressed keys(W/A/S/D)
-pub fn move_player(e: &sdl2::EventPump, player: &mut Player, game_map: &[[i32; 8]; 8]){
+pub fn move_player(e: &sdl2::EventPump, player: &mut Player, game_map: map::GameMap){
     let pressed_keys:HashSet<Scancode> = e.keyboard_state().pressed_scancodes().collect();
     if pressed_keys.contains(&Scancode::W){
         player.pos_y += player.dir_y * PLAYER_SPEED;
         player.pos_x += player.dir_x * PLAYER_SPEED;
         let idx_y = (player.pos_x / BLOCKSIZE as f32) as usize; // THESE TWO ARE CORRECT
         let idx_x = (player.pos_y / BLOCKSIZE as f32) as usize; // DUE TO HOW SDL2 HANDLES X/Y AXIS'
-        if game_map[idx_x][idx_y] == 1{
+        if game_map.walls[idx_x][idx_y] == 1{
             player.pos_y -= player.dir_y * PLAYER_SPEED;
             player.pos_x -= player.dir_x * PLAYER_SPEED;
         }
@@ -83,7 +85,7 @@ pub fn move_player(e: &sdl2::EventPump, player: &mut Player, game_map: &[[i32; 8
         player.pos_x -= player.dir_x * PLAYER_SPEED;
         let idx_y = (player.pos_x / BLOCKSIZE as f32) as usize; // THESE TWO ARE CORRECT
         let idx_x = (player.pos_y / BLOCKSIZE as f32) as usize; // DUE TO HOW SDL2 HANDLES X/Y AXIS'
-        if game_map[idx_x][idx_y] == 1{
+        if game_map.walls[idx_x][idx_y] == 1{
             player.pos_y += player.dir_y * PLAYER_SPEED;
             player.pos_x += player.dir_x * PLAYER_SPEED;
         }
@@ -99,17 +101,16 @@ pub fn move_player(e: &sdl2::EventPump, player: &mut Player, game_map: &[[i32; 8
         player.angle = normalize_angle(player.angle);
         (player.dir_x, player.dir_y) = get_deltas(player.angle);
     }
-    //println!("{}", player);
 }
 
 
 // Draws the 2D world
-pub fn draw_2d_world(canvas: &mut Canvas<Window>, player: &Player, game_map: &[[i32; 8]; 8]){
+pub fn draw_2d_world(canvas: &mut Canvas<Window>, player: &Player, game_map: map::GameMap){
     let mut x_position = 0;
     let mut y_position = 0;
     canvas.set_draw_color(WHITE);
 
-    for (_, row) in game_map.iter().enumerate() {
+    for (_, row) in game_map.walls.iter().enumerate() {
         for (_, value) in row.iter().enumerate() {
             if *value == 1{
                 canvas.set_draw_color(WHITE);
@@ -137,22 +138,25 @@ pub fn draw_2d_world(canvas: &mut Canvas<Window>, player: &Player, game_map: &[[
 // Draws the 2.5D world
 pub fn draw_rays(canvas: &mut Canvas<Window>, rays: [Ray; RAY_COUNT], textures: &mut[Texture; 2]){
     let mut x_pos: i16 = WINDOW_WIDTH as i16;
-    for (idx, ray) in rays.iter().enumerate(){
-        let mut line_color = GREEN;
+    for (_, ray) in rays.iter().enumerate(){
         x_pos -= 8;
         let line_height = (BLOCKSIZE * WINDOW_HEIGHT) as f32 / ray.distance;
         let mut line_start = (-line_height / 2_f32) + (WINDOW_HEIGHT / 2) as f32;
         if line_start < 0_f32 { 
             line_start = 0_f32;
         }
-        let mut line_end = (line_height / 2_f32) + (WINDOW_HEIGHT / 2) as f32;
-        if line_end >= WINDOW_HEIGHT as f32{
-            line_end = (WINDOW_HEIGHT - 1) as f32;
-        }
+        // let mut line_end = (line_height / 2_f32) + (WINDOW_HEIGHT / 2) as f32;
+        // if line_end >= WINDOW_HEIGHT as f32{
+        //     line_end = (WINDOW_HEIGHT - 1) as f32;
+        // }
         let mut texture = &textures[0];
-        if ray.hit_side == 1{
+        if ray.hit_side == 0{
+            texture = &textures[0];
+        }
+        else if ray.hit_side == 1{
             texture = &textures[1];
         }
+        
 
         // In case the line height is bigger than screen normalize it
         if line_height > WINDOW_HEIGHT as f32{
@@ -160,13 +164,13 @@ pub fn draw_rays(canvas: &mut Canvas<Window>, rays: [Ray; RAY_COUNT], textures: 
         }
         let buffer = Rect::new(ray.pos_x, 0, 8, line_height as u32); // src
         let position = Rect::new(x_pos as i32, line_start as i32, 8, line_height as u32); // dst
-        canvas.copy(&texture, buffer, position);
+        canvas.copy(&texture, buffer, position).expect("Couldn't draw the ray");
     }
 }
 
 
 /// Returns the ray distance(s) and the side(s) they were hit
-pub fn get_rays(player: &Player, game_map: &[[i32; 8]; 8], canvas: &mut Canvas<Window>) -> [Ray; RAY_COUNT]{
+pub fn get_rays(player: &Player, game_map: map::GameMap, canvas: &mut Canvas<Window>) -> [Ray; RAY_COUNT]{
     let mut rays: [Ray; RAY_COUNT] = [Ray::new(); RAY_COUNT]; 
     let player_x = player.pos_x;
     let player_y = player.pos_y;
@@ -202,7 +206,7 @@ pub fn get_rays(player: &Player, game_map: &[[i32; 8]; 8], canvas: &mut Canvas<W
         'inner: loop{
             if ray_angle == 0.0 || ray_angle == 180.0 {break 'inner;}
             if out_of_index(current_x, current_y) {horizontal_hit_pos = (current_x, current_y); break 'inner};
-            if game_map[(current_y as usize/64)][current_x as usize/64 as usize] == 1{
+            if game_map.walls[(current_y as usize/64)][current_x as usize/64 as usize] == 1{
                     horizontal_distance = get_distance(player_x, player_y, current_x, current_y, ray_angle);
                     horizontal_hit_pos = (current_x, current_y);
                     break 'inner;
@@ -228,7 +232,7 @@ pub fn get_rays(player: &Player, game_map: &[[i32; 8]; 8], canvas: &mut Canvas<W
         'inner: loop{       
             if ray_angle == 90.0 || ray_angle == 270.0 {break 'inner};     
             if out_of_index(current_x, current_y){vertical_hit_pos = (current_x, current_y); break 'inner };
-            if game_map[(current_y as usize/64)][current_x as usize/64 as usize] == 1{
+            if game_map.walls[(current_y as usize/64)][current_x as usize/64 as usize] == 1{
                 vertical_distance = get_distance(player_x, player_y, current_x, current_y, ray_angle);
                 vertical_hit_pos = (current_x, current_y);
                 
