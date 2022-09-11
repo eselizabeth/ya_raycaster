@@ -7,7 +7,6 @@ use sdl2::video::Window;
 use sdl2::render::TextureCreator;
 use sdl2::image::LoadTexture;
 use sdl2::rect::Rect;
-
 use ya_raycaster::*;
 pub mod map;
 
@@ -22,7 +21,6 @@ pub fn main() {
 
     let sdl_context = sdl2::init().unwrap();
     let video_subsystem = sdl_context.video().unwrap();
-
     let window: Window = video_subsystem.window("YA Raycaster", WINDOW_WIDTH, WINDOW_HEIGHT)
         .position_centered()
         .build()
@@ -63,8 +61,8 @@ pub fn main() {
 
         move_player(&event_pump, &mut main_player, ya_raycaster::map::GAME_MAP);
         let rays = get_rays(&main_player, ya_raycaster::map::GAME_MAP, &mut canvas);
-        draw_2d_world(&mut canvas, &main_player, ya_raycaster::map::GAME_MAP);
         draw_rays(&mut canvas, rays, &texture_gun, &mut game_textures);
+        draw_2d_world(&mut canvas, &main_player, ya_raycaster::map::GAME_MAP);
         if do_fire{ bullets = fire(&main_player, ya_raycaster::map::GAME_MAP);}
         if !bullets.is_empty(){
             let bullet = Rect::new(0, 0, 64, 64); // src

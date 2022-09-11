@@ -6,12 +6,11 @@ use sdl2::rect::Rect;
 use sdl2::video::Window;
 use sdl2::render::Canvas;
 use sdl2::keyboard::Scancode;
-use sdl2::gfx::primitives::DrawRenderer;
 use sdl2::render::Texture;
 pub mod map;
 
 pub const WINDOW_HEIGHT: u32 = 512;
-pub const WINDOW_WIDTH: u32 = 1024;
+pub const WINDOW_WIDTH: u32 = 960;
 
 pub const MAP_LENGTH: usize = 8;
 pub const MAP_WIDTH: usize = 8;
@@ -31,8 +30,12 @@ const PLAYER_SPEED: f32 = 4.0;
 const ROTATION_SPEED: f32 = 4.0;
 const RAY_COUNT: usize = 60; // Ray Count must be even
 const BULLET_SPEED: f32 = 4.0;
+const RAY_DRAWING_WIDTH: u32 = 16;
 
-
+const minimap_size: u32 = 128;
+const offset_x: i32 = (WINDOW_WIDTH - minimap_size) as i32; 
+const offset_y: i32 = 0;
+const minimap_block_size: u32 = 16;
 
 
 #[derive(Debug, Copy, Clone)]
@@ -111,37 +114,36 @@ pub fn draw_2d_world(canvas: &mut Canvas<Window>, player: &Player, game_map: map
     let mut x_position = 0;
     let mut y_position = 0;
     canvas.set_draw_color(WHITE);
-
     for (_, row) in game_map.walls.iter().enumerate() {
         for (_, value) in row.iter().enumerate() {
             if *value == 1{
                 canvas.set_draw_color(WHITE);
-                canvas.fill_rect(Rect::new(x_position, y_position, BLOCKSIZE, BLOCKSIZE)).expect("Couldn't draw the block");
+                canvas.fill_rect(Rect::new(offset_x + x_position, offset_y + y_position, minimap_block_size, minimap_block_size)).expect("Couldn't draw the block");
             }
 
             // This draws the grid
-            canvas.set_draw_color(GRAY);
-            canvas.fill_rect(Rect::new(x_position+BLOCKSIZE as i32 - 1, y_position, 1, BLOCKSIZE)).expect("Couldn't draw horizontal grid");
-            canvas.fill_rect(Rect::new(x_position, y_position+BLOCKSIZE as i32 - 1, BLOCKSIZE, 1)).expect("Couldn't draw vertical grid");
-            x_position += 64;
+            // canvas.set_draw_color(GRAY);
+            // canvas.fill_rect(Rect::new(x_position+BLOCKSIZE as i32 - 1, y_position, 1, BLOCKSIZE)).expect("Couldn't draw horizontal grid");
+            // canvas.fill_rect(Rect::new(x_position, y_position+BLOCKSIZE as i32 - 1, BLOCKSIZE, 1)).expect("Couldn't draw vertical grid");
+            x_position += minimap_block_size as i32;
         }
-        y_position += 64;
+        y_position += minimap_block_size as i32;
         x_position = 0;
 
     }
-
+    // Drawing the player
+    let (player_minimap_x, player_minimap_y) = normalize_for_minimap(player.pos_x, player.pos_y);
     canvas.set_draw_color(RED);
-    canvas.fill_rect(Rect::new(player.pos_x as i32 - 4, player.pos_y as i32 - 4, 8, 8)).expect("Couldn't draw player");
-    canvas.thick_line((player.pos_x + player.dir_x * 20_f32) as i16, (player.pos_y + player.dir_y * 20_f32) as i16,
-                      (player.pos_x) as i16, (player.pos_y) as i16, 2, RED)
-                      .expect("Couldn't draw the direction pointer");
+    canvas.fill_rect(Rect::new(player_minimap_x,  // maybe use minimap_block_size / 4 instead of hardcoded   
+                               player_minimap_y,  // 4
+                                4, 4)).expect("Couldn't draw player");
 }
 
 // Draws the 2.5D world
 pub fn draw_rays(canvas: &mut Canvas<Window>, rays: [Ray; RAY_COUNT], texture_gun: &Texture<'_>, textures: &mut[Texture; 2]){
     let mut x_pos: i16 = WINDOW_WIDTH as i16;
     for (_, ray) in rays.iter().enumerate(){
-        x_pos -= 8;
+        x_pos -= RAY_DRAWING_WIDTH as i16;
         let line_height = (BLOCKSIZE * WINDOW_HEIGHT) as f32 / ray.distance;
         let mut line_start = (-line_height / 2_f32) + (WINDOW_HEIGHT / 2) as f32;
         if line_start < 0_f32 { 
@@ -158,14 +160,13 @@ pub fn draw_rays(canvas: &mut Canvas<Window>, rays: [Ray; RAY_COUNT], texture_gu
         else if ray.hit_side == 1{
             texture = &textures[1];
         }
-        
-
+    
         // In case the line height is bigger than screen normalize it
         if line_height > WINDOW_HEIGHT as f32{
            line_start = (WINDOW_HEIGHT as f32 - line_height) / 2.0;
         }
-        let buffer = Rect::new(ray.pos_x, 0, 8, line_height as u32); // src
-        let position = Rect::new(x_pos as i32, line_start as i32, 8, line_height as u32); // dst
+        let buffer = Rect::new(ray.pos_x, 0, RAY_DRAWING_WIDTH, line_height as u32); // src
+        let position = Rect::new(x_pos as i32, line_start as i32, RAY_DRAWING_WIDTH, line_height as u32); // dst
         canvas.copy(&texture, buffer, position).expect("Couldn't draw the ray");
     }
     // Drawing the gun
@@ -212,7 +213,7 @@ pub fn get_rays(player: &Player, game_map: map::GameMap, canvas: &mut Canvas<Win
         'inner: loop{
             if ray_angle == 0.0 || ray_angle == 180.0 {break 'inner;}
             if out_of_index(current_x, current_y) {horizontal_hit_pos = (current_x, current_y); break 'inner};
-            if game_map.walls[(current_y as usize/64)][current_x as usize/64 as usize] == 1{
+            if get_wall_content(&game_map, current_x, current_y) == 1{
                     horizontal_distance = get_distance(player_x, player_y, current_x, current_y, ray_angle);
                     horizontal_hit_pos = (current_x, current_y);
                     break 'inner;
@@ -238,7 +239,7 @@ pub fn get_rays(player: &Player, game_map: map::GameMap, canvas: &mut Canvas<Win
         'inner: loop{       
             if ray_angle == 90.0 || ray_angle == 270.0 {break 'inner};     
             if out_of_index(current_x, current_y){vertical_hit_pos = (current_x, current_y); break 'inner };
-            if game_map.walls[(current_y as usize/64)][current_x as usize/64 as usize] == 1{
+            if get_wall_content(&game_map, current_x, current_y) == 1{
                 vertical_distance = get_distance(player_x, player_y, current_x, current_y, ray_angle);
                 vertical_hit_pos = (current_x, current_y);
                 
@@ -254,17 +255,20 @@ pub fn get_rays(player: &Player, game_map: map::GameMap, canvas: &mut Canvas<Win
             current_ray.distance = fix_fisheye(player_angle, ray_angle, horizontal_distance);
             current_ray.hit_side = 0;
             current_ray.pos_x = (horizontal_hit_pos.0.floor() as u32 % BLOCKSIZE) as i32;
-            canvas.thick_line((horizontal_hit_pos.0) as i16, (horizontal_hit_pos.1) as i16,
-            (player_x) as i16, (player_y) as i16, 2, GREEN)
-            .expect("Couldn't draw the ray");
+            // let (minimap_hit_x, minimap_hit_y) = normalize_for_minimap(horizontal_hit_pos.0, horizontal_hit_pos.1);
+            // let (player_minimap_x, player_minimap_y) = normalize_for_minimap(player_x, player_y);
+            // canvas.set_draw_color(GREEN);
+            // canvas.draw_line((minimap_hit_x, minimap_hit_y), (player_minimap_x, player_minimap_y)).expect("Couldn't draw ray");
+
         }
         else if vertical_distance < horizontal_distance{
             current_ray.distance = fix_fisheye(player_angle, ray_angle, vertical_distance);
             current_ray.hit_side = 1;
             current_ray.pos_x = (horizontal_hit_pos.0.floor() as u32 % BLOCKSIZE) as i32;
-            canvas.thick_line((vertical_hit_pos.0) as i16, (vertical_hit_pos.1) as i16,
-            (player_x) as i16, (player_y) as i16, 2, RED)
-            .expect("Couldn't draw the ray");
+            // let (minimap_hit_x, minimap_hit_y) = normalize_for_minimap(vertical_hit_pos.0, vertical_hit_pos.1);
+            // let (player_minimap_x, player_minimap_y) = normalize_for_minimap(player_x, player_y);
+            // canvas.set_draw_color(RED);
+            // canvas.draw_line((minimap_hit_x, minimap_hit_y), (player_minimap_x, player_minimap_y)).expect("Couldn't draw ray");
         }
         rays[array_idx] = current_ray;
         ray_angle += 1.0;
@@ -349,6 +353,21 @@ fn out_of_index(x_position: f32, y_position: f32) -> bool{
         return false;
     }
 
+}
+
+// Takes X and Y positions and returns the wall content of GameMaps
+fn get_wall_content(game_map: &map::GameMap, x_position: f32, y_position: f32) -> i32{
+    let idx_y: usize = x_position as usize / BLOCKSIZE as usize; // THESE TWO ARE CORRECT
+    let idx_x: usize = y_position as usize / BLOCKSIZE as usize; // DUE TO HOW SDL2 HANDLES X/Y AXIS'
+    return game_map.walls[idx_x][idx_y];
+}
+
+
+// Normalizes X and Y position relative to scale of minimap
+fn normalize_for_minimap(pos_x: f32, pos_y: f32) -> (i32, i32){
+    return (
+    offset_x + (pos_x / 4 as f32) as i32,
+    offset_y +(pos_y / 4 as f32) as i32);
 }
 
 
