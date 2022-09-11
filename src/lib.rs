@@ -26,12 +26,14 @@ pub const DARK_GREEN: Color =  Color::RGB(0, 100, 0);
 pub const BLUE: Color =  Color::RGB(0, 0, 255);
 
 
-pub const BLOCKSIZE: u32 = 64;
+pub const BLOCKSIZE: u32 = 60;
 const PLAYER_SPEED: f32 = 4.0;
-const ROTATION_SPEED: f32 = 4.0;
+const ROTATION_SPEED: f32 = 3.0;
 const RAY_COUNT: usize = 60; // Ray Count must be even
-const BULLET_SPEED: f32 = 4.0;
+const BULLET_SPEED: f32 = 1.0;
 const RAY_DRAWING_WIDTH: u32 = 12;
+
+const WORLDSIZE: u32 = BLOCKSIZE * MAP_LENGTH as u32;
 
 const MINIMAP_SIZE: u32 = 128;
 const MINIMAP_OFFSET_X: i32 = (WINDOW_WIDTH - MINIMAP_SIZE) as i32; 
@@ -46,6 +48,7 @@ pub struct Player{
     pub angle: f32, // Player angle
     pub dir_x: f32, // Delta X
     pub dir_y: f32, // Delta Y
+    pub fired: bool,
 
 }
 
@@ -111,7 +114,7 @@ pub fn move_player(e: &sdl2::EventPump, player: &mut Player, game_map: map::Game
 
 
 // Draws the 2D world
-pub fn draw_2d_world(canvas: &mut Canvas<Window>, player: &Player, game_map: map::GameMap){
+pub fn draw_2d_world(canvas: &mut Canvas<Window>, player: &Player, game_map: map::GameMap, gun_textures: &[Texture<'_>;3 ]){
     let mut x_position = 0;
     let mut y_position = 0;
     canvas.set_draw_color(WHITE);
@@ -132,16 +135,25 @@ pub fn draw_2d_world(canvas: &mut Canvas<Window>, player: &Player, game_map: map
         x_position = 0;
 
     }
-    // Drawing the player
+    // Drawing the player to the minimap
     let (player_minimap_x, player_minimap_y) = normalize_for_minimap(player.pos_x, player.pos_y);
     canvas.set_draw_color(RED);
     canvas.fill_rect(Rect::new(player_minimap_x,  // maybe use MINIMAP_BLOCK_SIZE / 4 instead of hardcoded   
                                player_minimap_y,  // 4
                                 4, 4)).expect("Couldn't draw player");
+    // Drawing the gun
+    let gun = Rect::new(0, 0, 128, 184); // src
+    let position = Rect::new((WINDOW_WIDTH / 2) as i32 - 64, 512 - 184, 128, 184); // dst
+    if player.fired{
+        canvas.copy(&gun_textures[1], gun, position).expect("Couldn't draw the gun_fired");
+    }
+    else{
+        canvas.copy(&gun_textures[0], gun, position).expect("Couldn't draw the gun_normal");
+    }
 }
 
 // Draws the 2.5D world
-pub fn draw_rays(canvas: &mut Canvas<Window>, rays: [Ray; RAY_COUNT], texture_gun: &Texture<'_>, textures: &mut[Texture; 2]){
+pub fn draw_rays(canvas: &mut Canvas<Window>, rays: [Ray; RAY_COUNT], textures: &mut[Texture; 2]){
     let mut x_pos: i16 = WINDOW_WIDTH as i16;
     for (_, ray) in rays.iter().enumerate(){
         x_pos -= RAY_DRAWING_WIDTH as i16;
@@ -170,10 +182,7 @@ pub fn draw_rays(canvas: &mut Canvas<Window>, rays: [Ray; RAY_COUNT], texture_gu
         let position = Rect::new(x_pos as i32, line_start as i32, RAY_DRAWING_WIDTH, line_height as u32); // dst
         canvas.copy(&texture, buffer, position).expect("Couldn't draw the ray");
     }
-    // Drawing the gun
-    let gun = Rect::new(0, 0, 256, 128); // src
-    let position = Rect::new(512 + 128, 512 - 128, 256, 128); // dst
-    canvas.copy(&texture_gun, gun, position).expect("Couldn't draw the ray");
+
 }
 
 
@@ -256,20 +265,20 @@ pub fn get_rays(player: &Player, game_map: map::GameMap, canvas: &mut Canvas<Win
             current_ray.distance = fix_fisheye(player_angle, ray_angle, horizontal_distance);
             current_ray.hit_side = 0;
             current_ray.pos_x = (horizontal_hit_pos.0.floor() as u32 % BLOCKSIZE) as i32;
-            // let (minimap_hit_x, minimap_hit_y) = normalize_for_minimap(horizontal_hit_pos.0, horizontal_hit_pos.1);
-            // let (player_minimap_x, player_minimap_y) = normalize_for_minimap(player_x, player_y);
-            // canvas.set_draw_color(GREEN);
-            // canvas.draw_line((minimap_hit_x, minimap_hit_y), (player_minimap_x, player_minimap_y)).expect("Couldn't draw ray");
+            let (minimap_hit_x, minimap_hit_y) = normalize_for_minimap(horizontal_hit_pos.0, horizontal_hit_pos.1);
+            let (player_minimap_x, player_minimap_y) = normalize_for_minimap(player_x, player_y);
+            canvas.set_draw_color(GREEN);
+            canvas.draw_line((minimap_hit_x, minimap_hit_y), (player_minimap_x, player_minimap_y)).expect("Couldn't draw ray");
 
         }
         else if vertical_distance < horizontal_distance{
             current_ray.distance = fix_fisheye(player_angle, ray_angle, vertical_distance);
             current_ray.hit_side = 1;
             current_ray.pos_x = (horizontal_hit_pos.0.floor() as u32 % BLOCKSIZE) as i32;
-            // let (minimap_hit_x, minimap_hit_y) = normalize_for_minimap(vertical_hit_pos.0, vertical_hit_pos.1);
-            // let (player_minimap_x, player_minimap_y) = normalize_for_minimap(player_x, player_y);
-            // canvas.set_draw_color(RED);
-            // canvas.draw_line((minimap_hit_x, minimap_hit_y), (player_minimap_x, player_minimap_y)).expect("Couldn't draw ray");
+            let (minimap_hit_x, minimap_hit_y) = normalize_for_minimap(vertical_hit_pos.0, vertical_hit_pos.1);
+            let (player_minimap_x, player_minimap_y) = normalize_for_minimap(player_x, player_y);
+            canvas.set_draw_color(RED);
+            canvas.draw_line((minimap_hit_x, minimap_hit_y), (player_minimap_x, player_minimap_y)).expect("Couldn't draw ray");
         }
         rays[array_idx] = current_ray;
         ray_angle += 1.0;
@@ -284,16 +293,16 @@ pub fn fire(player: &Player, game_map: map::GameMap) -> Vec<Rect>{
     let mut bullets: Vec<Rect> = Vec::new();
     let mut bullet_x = player.pos_x;
     let mut bullet_y = player.pos_y;
-    let mut drawing_x_pos = 512 + 235;
-    let mut drawing_y_pos = 512-120;
+    let mut drawing_x_pos = 330;
+    let mut drawing_y_pos = 330;
     let mut height: i32 = 64;
     let mut width: i32 = 64;
     loop {
-        bullet_x += player.dir_x * BULLET_SPEED;
-        bullet_y += player.dir_y * BULLET_SPEED;
+        println!("bullet x: {} bullet y: {}", bullet_x, bullet_y);
         let idx_y: usize = bullet_x as usize / BLOCKSIZE as usize; // THESE TWO ARE CORRECT
         let idx_x: usize = bullet_y as usize / BLOCKSIZE as usize; // DUE TO HOW SDL2 HANDLES X/Y AXIS'
-        if {(bullet_x.abs() > WINDOW_WIDTH as f32 || bullet_y.abs() > WINDOW_HEIGHT as f32)
+        if {(bullet_x > WORLDSIZE as f32 || bullet_y > WORLDSIZE as f32
+            || (bullet_x < 0.0 || bullet_y < 0.0))
             || game_map.walls[idx_x][idx_y] == 1} 
         {
             bullets.reverse();
@@ -306,7 +315,9 @@ pub fn fire(player: &Player, game_map: map::GameMap) -> Vec<Rect>{
         drawing_x_pos += 2;
         width -= 5;
         height -= 5;
-        drawing_y_pos -= 10;
+        drawing_y_pos -= 5;
+        bullet_x += player.dir_x * BULLET_SPEED;
+        bullet_y += player.dir_y * BULLET_SPEED;
     }
 
 }
@@ -357,7 +368,7 @@ fn out_of_index(x_position: f32, y_position: f32) -> bool{
 }
 
 // Takes X and Y positions and returns the wall content of GameMaps
-fn get_wall_content(game_map: &map::GameMap, x_position: f32, y_position: f32) -> i32{
+pub fn get_wall_content(game_map: &map::GameMap, x_position: f32, y_position: f32) -> i32{
     let idx_y: usize = x_position as usize / BLOCKSIZE as usize; // THESE TWO ARE CORRECT
     let idx_x: usize = y_position as usize / BLOCKSIZE as usize; // DUE TO HOW SDL2 HANDLES X/Y AXIS'
     return game_map.walls[idx_x][idx_y];

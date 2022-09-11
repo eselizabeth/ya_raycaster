@@ -18,6 +18,7 @@ pub fn main() {
         angle: 60.0,
         dir_x: get_deltas(60.0).0,
         dir_y: get_deltas(60.0).1,
+        fired: false
     };
     // Loading sounds
     let mut soloud_player = Soloud::default().unwrap();
@@ -42,18 +43,21 @@ pub fn main() {
         texture_creator.load_texture("assets/textures/block_1_dark.png").expect("Couldn't load texture"),
     ];
     let mut bullets: Vec<Rect> = Vec::new();
-    let texture_gun = texture_creator.load_texture("assets/textures/gun.png").expect("Couldn't load texture");
-    let texture_bullet = texture_creator.load_texture("assets/textures/bullet.png").expect("Couldn't load texture");
+    let mut gun_textures: [sdl2::render::Texture; 3] = [
+        texture_creator.load_texture("assets/textures/gun_normal.png").expect("Couldn't load texture"),
+        texture_creator.load_texture("assets/textures/gun_fired.png").expect("Couldn't load texture"),
+        texture_creator.load_texture("assets/textures/bullet.png").expect("Couldn't load texture"),
+    ];
     let mut event_pump = sdl_context.event_pump().unwrap();
     'running: loop {
-        let mut do_fire: bool = false;
+        main_player.fired = false;
         for event in event_pump.poll_iter() {
             match event {
                 Event::Quit { .. } => {
                     break 'running;
                 }
                 Event::MouseButtonDown { .. } => {
-                    do_fire = true;
+                    main_player.fired  = true;
                     soloud_player.play(&gun_shoot);
                 },
                 Event::KeyDown { keycode: Some(Keycode::Escape), .. } => {
@@ -67,20 +71,20 @@ pub fn main() {
         canvas.set_draw_color(BLACK);
         canvas.clear();
         // ** //
-
-
         move_player(&event_pump, &mut main_player, ya_raycaster::map::GAME_MAP);
         let rays = get_rays(&main_player, ya_raycaster::map::GAME_MAP, &mut canvas);
-        draw_rays(&mut canvas, rays, &texture_gun, &mut game_textures);
-        draw_2d_world(&mut canvas, &main_player, ya_raycaster::map::GAME_MAP);
-        if do_fire{ bullets = fire(&main_player, ya_raycaster::map::GAME_MAP);}
+        draw_rays(&mut canvas, rays, &mut game_textures);
+        draw_2d_world(&mut canvas, &main_player, ya_raycaster::map::GAME_MAP, &mut gun_textures);
+        if main_player.fired { bullets = fire(&main_player, ya_raycaster::map::GAME_MAP);}
         if !bullets.is_empty(){
-            if do_fire {soloud_player.play(&gun_hit);}
             let bullet = Rect::new(0, 0, 64, 64); // src
             let position = bullets.pop().unwrap(); // dst
-            canvas.copy(&texture_bullet, bullet, position).expect("Couldn't draw the ray");
+            canvas.copy(&gun_textures[2], bullet, position).expect("Couldn't draw the bullet");
+
         }
-        canvas.present(); // Put changes to the screen
+         // Put changes to the screen
+        canvas.present();
+        // ** //
         ::std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
     }
 }
