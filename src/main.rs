@@ -13,8 +13,8 @@ pub mod map;
 
 pub fn main() {
     let mut main_player = Player{
-        pos_x: 256.0,
-        pos_y: 256.0,
+        pos_x: 300.0,
+        pos_y: 300.0,
         angle: 60.0,
         dir_x: get_deltas(60.0).0,
         dir_y: get_deltas(60.0).1,
@@ -27,7 +27,7 @@ pub fn main() {
     };
 
     // Loading sounds
-    let mut soloud_player = Soloud::default().unwrap();
+    let soloud_player = Soloud::default().unwrap();
     let mut gun_shoot = audio::Wav::default();
     let mut gun_hit = audio::Wav::default();
     gun_shoot.load(&std::path::Path::new("assets/sounds/gun_shoot.wav")).unwrap();
@@ -79,7 +79,7 @@ pub fn main() {
         // ** //
         move_player(&event_pump, &mut game_instance);
         game_instance.rays = get_rays(&mut canvas, game_instance);
-        draw_rays(&mut canvas, game_instance.rays, &mut game_textures);
+        draw_rays(&mut canvas, game_instance, &mut game_textures);
         draw_2d_world(&mut canvas, game_instance, &mut gun_textures);
         if main_player.fired { bullets = fire(game_instance);}
         if !bullets.is_empty(){
