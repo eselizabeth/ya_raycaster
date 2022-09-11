@@ -7,6 +7,7 @@ use sdl2::video::Window;
 use sdl2::render::Canvas;
 use sdl2::keyboard::Scancode;
 use sdl2::render::Texture;
+use soloud::*;
 pub mod map;
 
 pub const WINDOW_HEIGHT: u32 = 512;
@@ -32,10 +33,10 @@ const RAY_COUNT: usize = 60; // Ray Count must be even
 const BULLET_SPEED: f32 = 4.0;
 const RAY_DRAWING_WIDTH: u32 = 16;
 
-const minimap_size: u32 = 128;
-const offset_x: i32 = (WINDOW_WIDTH - minimap_size) as i32; 
-const offset_y: i32 = 0;
-const minimap_block_size: u32 = 16;
+const MINIMAP_SIZE: u32 = 128;
+const MINIMAP_OFFSET_X: i32 = (WINDOW_WIDTH - MINIMAP_SIZE) as i32; 
+const MINIMAP_OFFSET_Y: i32 = 0;
+const MINIMAP_BLOCK_SIZE: u32 = 16;
 
 
 #[derive(Debug, Copy, Clone)]
@@ -118,23 +119,23 @@ pub fn draw_2d_world(canvas: &mut Canvas<Window>, player: &Player, game_map: map
         for (_, value) in row.iter().enumerate() {
             if *value == 1{
                 canvas.set_draw_color(WHITE);
-                canvas.fill_rect(Rect::new(offset_x + x_position, offset_y + y_position, minimap_block_size, minimap_block_size)).expect("Couldn't draw the block");
+                canvas.fill_rect(Rect::new(MINIMAP_OFFSET_X + x_position, MINIMAP_OFFSET_Y + y_position, MINIMAP_BLOCK_SIZE, MINIMAP_BLOCK_SIZE)).expect("Couldn't draw the block");
             }
 
             // This draws the grid
             // canvas.set_draw_color(GRAY);
             // canvas.fill_rect(Rect::new(x_position+BLOCKSIZE as i32 - 1, y_position, 1, BLOCKSIZE)).expect("Couldn't draw horizontal grid");
             // canvas.fill_rect(Rect::new(x_position, y_position+BLOCKSIZE as i32 - 1, BLOCKSIZE, 1)).expect("Couldn't draw vertical grid");
-            x_position += minimap_block_size as i32;
+            x_position += MINIMAP_BLOCK_SIZE as i32;
         }
-        y_position += minimap_block_size as i32;
+        y_position += MINIMAP_BLOCK_SIZE as i32;
         x_position = 0;
 
     }
     // Drawing the player
     let (player_minimap_x, player_minimap_y) = normalize_for_minimap(player.pos_x, player.pos_y);
     canvas.set_draw_color(RED);
-    canvas.fill_rect(Rect::new(player_minimap_x,  // maybe use minimap_block_size / 4 instead of hardcoded   
+    canvas.fill_rect(Rect::new(player_minimap_x,  // maybe use MINIMAP_BLOCK_SIZE / 4 instead of hardcoded   
                                player_minimap_y,  // 4
                                 4, 4)).expect("Couldn't draw player");
 }
@@ -366,8 +367,8 @@ fn get_wall_content(game_map: &map::GameMap, x_position: f32, y_position: f32) -
 // Normalizes X and Y position relative to scale of minimap
 fn normalize_for_minimap(pos_x: f32, pos_y: f32) -> (i32, i32){
     return (
-    offset_x + (pos_x / 4 as f32) as i32,
-    offset_y +(pos_y / 4 as f32) as i32);
+    MINIMAP_OFFSET_X + (pos_x / 4 as f32) as i32,
+    MINIMAP_OFFSET_Y +(pos_y / 4 as f32) as i32);
 }
 
 
