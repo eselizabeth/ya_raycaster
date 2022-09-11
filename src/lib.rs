@@ -11,10 +11,10 @@ use soloud::*;
 pub mod map;
 
 pub const WINDOW_HEIGHT: u32 = 512;
-pub const WINDOW_WIDTH: u32 = 960;
+pub const WINDOW_WIDTH: u32 = 720;
 
-pub const MAP_LENGTH: usize = 8;
-pub const MAP_WIDTH: usize = 8;
+pub const MAP_LENGTH: usize = 16;
+pub const MAP_WIDTH: usize = 16;
 
 
 pub const BLACK: Color = Color::RGB(0, 0, 0);
@@ -31,12 +31,12 @@ const PLAYER_SPEED: f32 = 4.0;
 const ROTATION_SPEED: f32 = 4.0;
 const RAY_COUNT: usize = 60; // Ray Count must be even
 const BULLET_SPEED: f32 = 4.0;
-const RAY_DRAWING_WIDTH: u32 = 16;
+const RAY_DRAWING_WIDTH: u32 = 12;
 
 const MINIMAP_SIZE: u32 = 128;
 const MINIMAP_OFFSET_X: i32 = (WINDOW_WIDTH - MINIMAP_SIZE) as i32; 
 const MINIMAP_OFFSET_Y: i32 = 0;
-const MINIMAP_BLOCK_SIZE: u32 = 16;
+const MINIMAP_BLOCK_SIZE: u32 = 8; // 	inversely proportional with MAP_LENGTH & MAP_WIDTH
 
 
 #[derive(Debug, Copy, Clone)]
@@ -367,8 +367,8 @@ fn get_wall_content(game_map: &map::GameMap, x_position: f32, y_position: f32) -
 // Normalizes X and Y position relative to scale of minimap
 fn normalize_for_minimap(pos_x: f32, pos_y: f32) -> (i32, i32){
     return (
-    MINIMAP_OFFSET_X + (pos_x / 4 as f32) as i32,
-    MINIMAP_OFFSET_Y +(pos_y / 4 as f32) as i32);
+    MINIMAP_OFFSET_X + (pos_x / (MINIMAP_BLOCK_SIZE ) as f32) as i32,
+    MINIMAP_OFFSET_Y +(pos_y / (MINIMAP_BLOCK_SIZE ) as f32) as i32);
 }
 
 
