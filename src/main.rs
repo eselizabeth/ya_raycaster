@@ -20,6 +20,12 @@ pub fn main() {
         dir_y: get_deltas(60.0).1,
         fired: false
     };
+    let mut game_instance = Game{
+        player: main_player,
+        rays: [Ray::new(); RAY_COUNT],
+        game_map: ya_raycaster::map::GAME_MAP
+    };
+
     // Loading sounds
     let mut soloud_player = Soloud::default().unwrap();
     let mut gun_shoot = audio::Wav::default();
@@ -71,11 +77,11 @@ pub fn main() {
         canvas.set_draw_color(BLACK);
         canvas.clear();
         // ** //
-        move_player(&event_pump, &mut main_player, ya_raycaster::map::GAME_MAP);
-        let rays = get_rays(&main_player, ya_raycaster::map::GAME_MAP, &mut canvas);
-        draw_rays(&mut canvas, rays, &mut game_textures);
-        draw_2d_world(&mut canvas, &main_player, ya_raycaster::map::GAME_MAP, &mut gun_textures);
-        if main_player.fired { bullets = fire(&main_player, ya_raycaster::map::GAME_MAP);}
+        move_player(&event_pump, &mut game_instance);
+        game_instance.rays = get_rays(&mut canvas, game_instance);
+        draw_rays(&mut canvas, game_instance.rays, &mut game_textures);
+        draw_2d_world(&mut canvas, game_instance, &mut gun_textures);
+        if main_player.fired { bullets = fire(game_instance);}
         if !bullets.is_empty(){
             let bullet = Rect::new(0, 0, 64, 64); // src
             let position = bullets.pop().unwrap(); // dst

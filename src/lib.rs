@@ -29,7 +29,7 @@ pub const BLUE: Color =  Color::RGB(0, 0, 255);
 pub const BLOCKSIZE: u32 = 60;
 const PLAYER_SPEED: f32 = 4.0;
 const ROTATION_SPEED: f32 = 3.0;
-const RAY_COUNT: usize = 60; // Ray Count must be even
+pub const RAY_COUNT: usize = 60; // Ray Count must be even
 const BULLET_SPEED: f32 = 1.0;
 const RAY_DRAWING_WIDTH: u32 = 12;
 
@@ -60,13 +60,20 @@ pub struct Ray{
 }
 
 impl Ray{
-    fn new() -> Ray{
+    pub fn new() -> Ray{
         Ray{
             distance: -1.0,
             hit_side: -1,
             pos_x: -1,
         }
     }
+
+}
+#[derive(Debug, Copy, Clone)]
+pub struct Game{
+    pub player: Player,
+    pub rays: [Ray; RAY_COUNT],
+    pub game_map: map::GameMap,
 
 }
 
@@ -77,48 +84,46 @@ impl fmt::Display for Player {
 }
 
 /// Moves the player according to pressed keys(W/A/S/D)
-pub fn move_player(e: &sdl2::EventPump, player: &mut Player, game_map: map::GameMap){
+pub fn move_player(e: &sdl2::EventPump, game: &mut Game){
     let pressed_keys:HashSet<Scancode> = e.keyboard_state().pressed_scancodes().collect();
     if pressed_keys.contains(&Scancode::W){
-        player.pos_y += player.dir_y * PLAYER_SPEED;
-        player.pos_x += player.dir_x * PLAYER_SPEED;
-        let idx_y = (player.pos_x / BLOCKSIZE as f32) as usize; // THESE TWO ARE CORRECT
-        let idx_x = (player.pos_y / BLOCKSIZE as f32) as usize; // DUE TO HOW SDL2 HANDLES X/Y AXIS'
-        if game_map.walls[idx_x][idx_y] == 1{
-            player.pos_y -= player.dir_y * PLAYER_SPEED;
-            player.pos_x -= player.dir_x * PLAYER_SPEED;
+        game.player.pos_y += game.player.dir_y * PLAYER_SPEED;
+        game.player.pos_x += game.player.dir_x * PLAYER_SPEED;
+        if get_wall_content(&game.game_map, game.player.pos_x, game.player.pos_y) != 0{
+            game.player.pos_y -= game.player.dir_y * PLAYER_SPEED;
+            game.player.pos_x -= game.player.dir_x * PLAYER_SPEED;
         }
     }
     else if pressed_keys.contains(&Scancode::S){
-        player.pos_y -= player.dir_y * PLAYER_SPEED;
-        player.pos_x -= player.dir_x * PLAYER_SPEED;
-        let idx_y = (player.pos_x / BLOCKSIZE as f32) as usize; // THESE TWO ARE CORRECT
-        let idx_x = (player.pos_y / BLOCKSIZE as f32) as usize; // DUE TO HOW SDL2 HANDLES X/Y AXIS'
-        if game_map.walls[idx_x][idx_y] == 1{
-            player.pos_y += player.dir_y * PLAYER_SPEED;
-            player.pos_x += player.dir_x * PLAYER_SPEED;
+        game.player.pos_y -= game.player.dir_y * PLAYER_SPEED;
+        game.player.pos_x -= game.player.dir_x * PLAYER_SPEED;
+        let idx_y = (game.player.pos_x / BLOCKSIZE as f32) as usize; // THESE TWO ARE CORRECT
+        let idx_x = (game.player.pos_y / BLOCKSIZE as f32) as usize; // DUE TO HOW SDL2 HANDLES X/Y AXIS'
+        if get_wall_content(&game.game_map, game.player.pos_x, game.player.pos_y) != 0{
+            game.player.pos_y += game.player.dir_y * PLAYER_SPEED;
+            game.player.pos_x += game.player.dir_x * PLAYER_SPEED;
         }
     }
     if pressed_keys.contains(&Scancode::A){
-        player.angle += ROTATION_SPEED;
-        player.angle = normalize_angle(player.angle);
-        (player.dir_x, player.dir_y) = get_deltas(player.angle);
+        game.player.angle += ROTATION_SPEED;
+        game.player.angle = normalize_angle(game.player.angle);
+        (game.player.dir_x, game.player.dir_y) = get_deltas(game.player.angle);
 
     }
     else if pressed_keys.contains(&Scancode::D){
-        player.angle -= ROTATION_SPEED;
-        player.angle = normalize_angle(player.angle);
-        (player.dir_x, player.dir_y) = get_deltas(player.angle);
+        game.player.angle -= ROTATION_SPEED;
+        game.player.angle = normalize_angle(game.player.angle);
+        (game.player.dir_x, game.player.dir_y) = get_deltas(game.player.angle);
     }
 }
 
 
 // Draws the 2D world
-pub fn draw_2d_world(canvas: &mut Canvas<Window>, player: &Player, game_map: map::GameMap, gun_textures: &[Texture<'_>;3 ]){
+pub fn draw_2d_world(canvas: &mut Canvas<Window>, game: Game, gun_textures: &[Texture<'_>;3 ]){
     let mut x_position = 0;
     let mut y_position = 0;
     canvas.set_draw_color(WHITE);
-    for (_, row) in game_map.walls.iter().enumerate() {
+    for (_, row) in game.game_map.walls.iter().enumerate() {
         for (_, value) in row.iter().enumerate() {
             if *value == 1{
                 canvas.set_draw_color(WHITE);
@@ -136,7 +141,7 @@ pub fn draw_2d_world(canvas: &mut Canvas<Window>, player: &Player, game_map: map
 
     }
     // Drawing the player to the minimap
-    let (player_minimap_x, player_minimap_y) = normalize_for_minimap(player.pos_x, player.pos_y);
+    let (player_minimap_x, player_minimap_y) = normalize_for_minimap(game.player.pos_x, game.player.pos_y);
     canvas.set_draw_color(RED);
     canvas.fill_rect(Rect::new(player_minimap_x,  // maybe use MINIMAP_BLOCK_SIZE / 4 instead of hardcoded   
                                player_minimap_y,  // 4
@@ -144,7 +149,7 @@ pub fn draw_2d_world(canvas: &mut Canvas<Window>, player: &Player, game_map: map
     // Drawing the gun
     let gun = Rect::new(0, 0, 128, 184); // src
     let position = Rect::new((WINDOW_WIDTH / 2) as i32 - 64, 512 - 184, 128, 184); // dst
-    if player.fired{
+    if game.player.fired{
         canvas.copy(&gun_textures[1], gun, position).expect("Couldn't draw the gun_fired");
     }
     else{
@@ -157,7 +162,7 @@ pub fn draw_rays(canvas: &mut Canvas<Window>, rays: [Ray; RAY_COUNT], textures: 
     let mut x_pos: i16 = WINDOW_WIDTH as i16;
     for (_, ray) in rays.iter().enumerate(){
         x_pos -= RAY_DRAWING_WIDTH as i16;
-        let line_height = (BLOCKSIZE * WINDOW_HEIGHT) as f32 / ray.distance;
+        let line_height = ((BLOCKSIZE * WINDOW_HEIGHT) as f32 / ray.distance);
         let mut line_start = (-line_height / 2_f32) + (WINDOW_HEIGHT / 2) as f32;
         if line_start < 0_f32 { 
             line_start = 0_f32;
@@ -187,15 +192,15 @@ pub fn draw_rays(canvas: &mut Canvas<Window>, rays: [Ray; RAY_COUNT], textures: 
 
 
 /// Returns the ray distance(s) and the side(s) they were hit
-pub fn get_rays(player: &Player, game_map: map::GameMap, canvas: &mut Canvas<Window>) -> [Ray; RAY_COUNT]{
+pub fn get_rays(canvas: &mut Canvas<Window>, game: Game) -> [Ray; RAY_COUNT]{
     let mut rays: [Ray; RAY_COUNT] = [Ray::new(); RAY_COUNT]; 
-    let player_x = player.pos_x;
-    let player_y = player.pos_y;
-    let player_angle = player.angle;
+    let player_x = game.player.pos_x;
+    let player_y = game.player.pos_y;
+    let player_angle = game.player.angle;
     // ** //
     let mut current_x: f32 = player_x;
     let mut current_y: f32 = player_y;
-    let mut ray_angle: f32 = player.angle - (RAY_COUNT as f32 / 2.0);
+    let mut ray_angle: f32 = game.player.angle - (RAY_COUNT as f32 / 2.0);
     let mut array_idx: usize = 0;
 
     loop {
@@ -223,10 +228,10 @@ pub fn get_rays(player: &Player, game_map: map::GameMap, canvas: &mut Canvas<Win
         'inner: loop{
             if ray_angle == 0.0 || ray_angle == 180.0 {break 'inner;}
             if out_of_index(current_x, current_y) {horizontal_hit_pos = (current_x, current_y); break 'inner};
-            if get_wall_content(&game_map, current_x, current_y) == 1{
-                    horizontal_distance = get_distance(player_x, player_y, current_x, current_y, ray_angle);
-                    horizontal_hit_pos = (current_x, current_y);
-                    break 'inner;
+            if get_wall_content(&game.game_map, current_x, current_y) == 1{
+                horizontal_distance = get_distance(player_x, player_y, current_x, current_y, ray_angle);
+                horizontal_hit_pos = (current_x, current_y);
+                break 'inner;
             }
             
             current_x += x_step;
@@ -249,7 +254,7 @@ pub fn get_rays(player: &Player, game_map: map::GameMap, canvas: &mut Canvas<Win
         'inner: loop{       
             if ray_angle == 90.0 || ray_angle == 270.0 {break 'inner};     
             if out_of_index(current_x, current_y){vertical_hit_pos = (current_x, current_y); break 'inner };
-            if get_wall_content(&game_map, current_x, current_y) == 1{
+            if get_wall_content(&game.game_map, current_x, current_y) == 1{
                 vertical_distance = get_distance(player_x, player_y, current_x, current_y, ray_angle);
                 vertical_hit_pos = (current_x, current_y);
                 
@@ -289,21 +294,18 @@ pub fn get_rays(player: &Player, game_map: map::GameMap, canvas: &mut Canvas<Win
         }
 }
 
-pub fn fire(player: &Player, game_map: map::GameMap) -> Vec<Rect>{
+pub fn fire(game: Game) -> Vec<Rect>{
     let mut bullets: Vec<Rect> = Vec::new();
-    let mut bullet_x = player.pos_x;
-    let mut bullet_y = player.pos_y;
+    let mut bullet_x = game.player.pos_x;
+    let mut bullet_y = game.player.pos_y;
     let mut drawing_x_pos = 330;
     let mut drawing_y_pos = 330;
     let mut height: i32 = 64;
     let mut width: i32 = 64;
     loop {
-        println!("bullet x: {} bullet y: {}", bullet_x, bullet_y);
-        let idx_y: usize = bullet_x as usize / BLOCKSIZE as usize; // THESE TWO ARE CORRECT
-        let idx_x: usize = bullet_y as usize / BLOCKSIZE as usize; // DUE TO HOW SDL2 HANDLES X/Y AXIS'
         if {(bullet_x > WORLDSIZE as f32 || bullet_y > WORLDSIZE as f32
             || (bullet_x < 0.0 || bullet_y < 0.0))
-            || game_map.walls[idx_x][idx_y] == 1} 
+            || get_wall_content(&game.game_map, bullet_x, bullet_y) != 0} 
         {
             bullets.reverse();
             return bullets;
@@ -316,8 +318,8 @@ pub fn fire(player: &Player, game_map: map::GameMap) -> Vec<Rect>{
         width -= 5;
         height -= 5;
         drawing_y_pos -= 5;
-        bullet_x += player.dir_x * BULLET_SPEED;
-        bullet_y += player.dir_y * BULLET_SPEED;
+        bullet_x += game.player.dir_x * BULLET_SPEED;
+        bullet_y += game.player.dir_y * BULLET_SPEED;
     }
 
 }
@@ -374,6 +376,11 @@ pub fn get_wall_content(game_map: &map::GameMap, x_position: f32, y_position: f3
     return game_map.walls[idx_x][idx_y];
 }
 
+pub fn get_height_content(game_map: &map::GameMap, x_position: f32, y_position: f32) -> i32{
+    let idx_y: usize = x_position as usize / BLOCKSIZE as usize; // THESE TWO ARE CORRECT
+    let idx_x: usize = y_position as usize / BLOCKSIZE as usize; // DUE TO HOW SDL2 HANDLES X/Y AXIS'
+    return game_map.heights[idx_x][idx_y];
+}
 
 // Normalizes X and Y position relative to scale of minimap
 fn normalize_for_minimap(pos_x: f32, pos_y: f32) -> (i32, i32){
