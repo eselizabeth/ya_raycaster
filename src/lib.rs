@@ -79,7 +79,7 @@ pub struct Game{
 
 impl fmt::Display for Player {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "(POS[X={} | Y={}], Angle = {}, Dir[X={} | Y={}])", self.pos_x, self.pos_y, self.angle, self.dir_x, self.dir_y)
+        write!(f, "(POS[X={} | Y={}], Angle = {}, Dir[X={} | Y={}], Fired: {}", self.pos_x, self.pos_y, self.angle, self.dir_x, self.dir_y, self.fired)
     }
 }
 
@@ -136,8 +136,8 @@ pub fn draw_2d_world(canvas: &mut Canvas<Window>, game: Game, gun_textures: &[Te
     // Drawing the player to the minimap
     let (player_minimap_x, player_minimap_y) = normalize_for_minimap(game.player.pos_x, game.player.pos_y);
     canvas.set_draw_color(RED);
-    canvas.fill_rect(Rect::new(player_minimap_x,  // maybe use MINIMAP_BLOCK_SIZE / 4 instead of hardcoded   
-                               player_minimap_y,  // 4
+    canvas.fill_rect(Rect::new(player_minimap_x + 2,
+                               player_minimap_y + 2,
                                 4, 4)).expect("Couldn't draw player");
     // Drawing the gun
     let gun = Rect::new(0, 0, 128, 184); // src
@@ -160,8 +160,9 @@ pub fn draw_rays(canvas: &mut Canvas<Window>, game: Game, textures: &mut[Texture
         let mut last_pos = (-1, -1);
         let mut buffer_cut: i32 = 64 - RAY_DRAWING_WIDTH as i32;
         for (_, ray) in level.iter().enumerate(){
-            if ray.pos_x == -1 || ray.pos_x == -1 {continue;}
             x_pos -= RAY_DRAWING_WIDTH as i16;
+            if ray.pos_x == -1 || ray.pos_y == -1 {continue;}
+
             let line_height = (BLOCKSIZE * WINDOW_HEIGHT) as f32 / ray.distance;
             let mut line_start = (-line_height / 2_f32) + (WINDOW_HEIGHT / 2) as f32;
             if line_start < 0_f32 { 
@@ -252,26 +253,21 @@ pub fn get_rays(canvas: &mut Canvas<Window>, game: Game) -> [[Ray; RAY_COUNT]; 3
         // Vertical Check end //
         for (idx, _) in horizontal_distances.iter().enumerate(){
             let mut current_ray = Ray::new();
+            // if idx == 2{
+            //     println!("Level 2 horizontal {:?} vertical {:?}", horizontal_hit_poses[idx], vertical_hit_poses[idx]);
+            // }
             if horizontal_distances[idx] < vertical_distances[idx]{
                 current_ray.distance = fix_fisheye(player_angle, ray_angle, horizontal_distances[idx]);
                 current_ray.hit_side = 0;
-                current_ray.pos_x = (horizontal_hit_poses[idx].0 as u32 / BLOCKSIZE) as i32;
-                current_ray.pos_y = (horizontal_hit_poses[idx].1 as u32 / BLOCKSIZE) as i32;
-                let (minimap_hit_x, minimap_hit_y) = normalize_for_minimap(horizontal_hit_poses[idx].0, horizontal_hit_poses[idx].1);
-                let (player_minimap_x, player_minimap_y) = normalize_for_minimap(player_x, player_y);
-                canvas.set_draw_color(GREEN);
-                canvas.draw_line((minimap_hit_x, minimap_hit_y), (player_minimap_x + 2, player_minimap_y + 2)).expect("Couldn't draw ray");
-    
+                current_ray.pos_x = horizontal_hit_poses[idx].0;
+                current_ray.pos_y = horizontal_hit_poses[idx].1;
             }
             else{
                 current_ray.distance = fix_fisheye(player_angle, ray_angle, vertical_distances[idx]);
                 current_ray.hit_side = 1;
-                current_ray.pos_x = (vertical_hit_poses[idx].0 as u32 / BLOCKSIZE) as i32;
-                current_ray.pos_y = (vertical_hit_poses[idx].1 as u32 / BLOCKSIZE) as i32;
-                let (minimap_hit_x, minimap_hit_y) = normalize_for_minimap(vertical_hit_poses[idx].0, vertical_hit_poses[idx].1);
-                let (player_minimap_x, player_minimap_y) = normalize_for_minimap(player_x, player_y);
-                canvas.set_draw_color(RED);
-                canvas.draw_line((minimap_hit_x, minimap_hit_y), (player_minimap_x + 2, player_minimap_y + 2)).expect("Couldn't draw ray");
+                current_ray.pos_x = vertical_hit_poses[idx].0;
+                current_ray.pos_y = vertical_hit_poses[idx].1;
+        
             }
             rays[idx][array_idx] = current_ray;
         }
@@ -374,9 +370,9 @@ fn normalize_for_minimap(pos_x: f32, pos_y: f32) -> (i32, i32){
 }
 
 // Calculates distances of each level, if it doesn't hit an array returns distance of 9999 and hit poses of (-1.0, -1.0)
-fn calculate_distances(game_map: map::GameMap, orig_current_x: f32, orig_current_y: f32, x_step: f32, y_step: f32, ray_angle: f32, player_x: f32, player_y: f32, vertical: bool) -> ([f32; 3], [(f32, f32); 3]) {
+fn calculate_distances(game_map: map::GameMap, orig_current_x: f32, orig_current_y: f32, x_step: f32, y_step: f32, ray_angle: f32, player_x: f32, player_y: f32, vertical: bool) -> ([f32; 3], [(i32, i32); 3]) {
     let mut distances: [f32; 3] = [9999.0; 3];
-    let mut vertical_hit_poses: [(f32, f32); 3] = [(-1.0, -1.0); 3];
+    let mut hit_poses: [(i32, i32); 3] = [(-1, -1); 3];
     for idx in 0..3{
         let mut map = game_map.first_level;
         if idx == 1{
@@ -394,19 +390,20 @@ fn calculate_distances(game_map: map::GameMap, orig_current_x: f32, orig_current
             if !vertical{
                 if ray_angle == 180.0 || normalize_angle(ray_angle) == 0.0 {break 'inner};
             }
-            if out_of_index(current_x, current_y) {vertical_hit_poses[idx] = (-1.0, -1.0); break 'inner};
+            if out_of_index(current_x, current_y) {hit_poses[idx] = (-1, -1); break 'inner};
             if get_item_by_pos(map, current_x, current_y) == 1{
                 distances[idx] = get_distance(player_x, player_y, current_x, current_y, ray_angle);
-                vertical_hit_poses[idx] = (current_x, current_y);
+                hit_poses[idx] = ((current_x as u32 / BLOCKSIZE) as i32, (current_y as u32 / BLOCKSIZE) as i32);
                 break 'inner;
             }
             current_x += x_step;
             current_y += y_step;
         }
     }
-    return (distances, vertical_hit_poses);
+    return (distances, hit_poses);
 }
-
+// current_ray.pos_x = (horizontal_hit_poses[idx].0 as u32 / BLOCKSIZE) as i32;
+// current_ray.pos_y = (horizontal_hit_poses[idx].1 as u32 / BLOCKSIZE) as i32;
 
 /// Tests
 #[cfg(test)]

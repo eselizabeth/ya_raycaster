@@ -12,16 +12,15 @@ use soloud::*;
 pub mod map;
 
 pub fn main() {
-    let mut main_player = Player{
-        pos_x: 300.0,
-        pos_y: 300.0,
-        angle: 60.0,
-        dir_x: get_deltas(60.0).0,
-        dir_y: get_deltas(60.0).1,
-        fired: false
-    };
     let mut game_instance = Game{
-        player: main_player,
+        player: Player{
+            pos_x: 300.0,
+            pos_y: 300.0,
+            angle: 60.0,
+            dir_x: get_deltas(60.0).0,
+            dir_y: get_deltas(60.0).1,
+            fired: false
+        },
         rays: [[Ray::new(); RAY_COUNT], [Ray::new(); RAY_COUNT], [Ray::new(); RAY_COUNT]],
         game_map: ya_raycaster::map::GAME_MAP
     };
@@ -43,6 +42,7 @@ pub fn main() {
         .unwrap();
     
     let mut canvas: Canvas<Window> = window.into_canvas().target_texture().present_vsync().build().unwrap();
+    // Textures
     let texture_creator = canvas.texture_creator();
     let mut game_textures: [sdl2::render::Texture; 2] = [
         texture_creator.load_texture("assets/textures/block_1.png").expect("Couldn't load texture"),
@@ -56,14 +56,14 @@ pub fn main() {
     ];
     let mut event_pump = sdl_context.event_pump().unwrap();
     'running: loop {
-        main_player.fired = false;
+        game_instance.player.fired = false;
         for event in event_pump.poll_iter() {
             match event {
                 Event::Quit { .. } => {
                     break 'running;
                 }
                 Event::MouseButtonDown { .. } => {
-                    main_player.fired  = true;
+                    game_instance.player.fired  = true;
                     soloud_player.play(&gun_shoot);
                 },
                 Event::KeyDown { keycode: Some(Keycode::Escape), .. } => {
@@ -81,7 +81,7 @@ pub fn main() {
         game_instance.rays = get_rays(&mut canvas, game_instance);
         draw_rays(&mut canvas, game_instance, &mut game_textures);
         draw_2d_world(&mut canvas, game_instance, &mut gun_textures);
-        if main_player.fired { bullets = fire(game_instance);}
+        if game_instance.player.fired { bullets = fire(game_instance);}
         if !bullets.is_empty(){
             let bullet = Rect::new(0, 0, 64, 64); // src
             let position = bullets.pop().unwrap(); // dst
