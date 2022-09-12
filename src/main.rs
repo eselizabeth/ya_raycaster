@@ -22,7 +22,7 @@ pub fn main() {
     };
     let mut game_instance = Game{
         player: main_player,
-        rays: [Ray::new(); RAY_COUNT],
+        rays: [[Ray::new(); RAY_COUNT], [Ray::new(); RAY_COUNT], [Ray::new(); RAY_COUNT]],
         game_map: ya_raycaster::map::GAME_MAP
     };
 
