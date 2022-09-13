@@ -6,9 +6,9 @@ use sdl2::render::Canvas;
 use sdl2::video::Window;
 use sdl2::image::LoadTexture;
 use sdl2::rect::Rect;
+use sdl2::pixels::Color;
 use ya_raycaster::*;
 use soloud::*;
-
 pub mod map;
 
 pub fn main() {
@@ -80,6 +80,7 @@ pub fn main() {
         move_player(&event_pump, &mut game_instance);
         game_instance.rays = get_rays(&mut canvas, game_instance);
         draw_rays(&mut canvas, game_instance, &mut game_textures);
+        canvas.set_scale(1.0, 1.0).expect("Couldn't scale the canvas");
         draw_2d_world(&mut canvas, game_instance, &mut gun_textures);
         if game_instance.player.fired { bullets = fire(game_instance);}
         if !bullets.is_empty(){
