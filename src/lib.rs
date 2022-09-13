@@ -214,7 +214,10 @@ pub fn get_rays(canvas: &mut Canvas<Window>, game: Game) -> [[Ray; RAY_COUNT]; 3
     let mut current_y: f32;
     let mut ray_angle: f32 = game.player.angle - (RAY_COUNT as f32 / 2.0);
     let mut array_idx: usize = 0;
-
+    // For debug purposes
+    if RAY_COUNT == 1{
+        ray_angle = player_angle;
+    }
     loop {
         ray_angle = normalize_angle(ray_angle);
         let mut x_step: f32;
@@ -253,9 +256,6 @@ pub fn get_rays(canvas: &mut Canvas<Window>, game: Game) -> [[Ray; RAY_COUNT]; 3
         // Vertical Check end //
         for (idx, _) in horizontal_distances.iter().enumerate(){
             let mut current_ray = Ray::new();
-            // if idx == 2{
-            //     println!("Level 2 horizontal {:?} vertical {:?}", horizontal_hit_poses[idx], vertical_hit_poses[idx]);
-            // }
             if horizontal_distances[idx] < vertical_distances[idx]{
                 current_ray.distance = fix_fisheye(player_angle, ray_angle, horizontal_distances[idx]);
                 current_ray.hit_side = 0;
@@ -346,7 +346,8 @@ pub fn get_deltas(angle: f32) -> (f32, f32){
 fn out_of_index(x_position: f32, y_position: f32) -> bool{
     let idx_y: usize = x_position as usize / BLOCKSIZE as usize; // THESE TWO ARE CORRECT
     let idx_x: usize = y_position as usize / BLOCKSIZE as usize; // DUE TO HOW SDL2 HANDLES X/Y AXIS'
-    if idx_y >= MAP_LENGTH || idx_x >= MAP_WIDTH {
+    if idx_y >= MAP_LENGTH || idx_x >= MAP_WIDTH 
+       || x_position < 0.0 || y_position < 0.0{
         return true;
     }
     else{
@@ -390,6 +391,7 @@ fn calculate_distances(game_map: map::GameMap, orig_current_x: f32, orig_current
             if !vertical{
                 if ray_angle == 180.0 || normalize_angle(ray_angle) == 0.0 {break 'inner};
             }
+            // println!("Vertical: {}, Level: {}, ray_angle: {}, current_x: {}, current_y: {}, x_step: {}, y_step {}", vertical, idx, ray_angle, current_x, current_y, x_step, y_step);
             if out_of_index(current_x, current_y) {hit_poses[idx] = (-1, -1); break 'inner};
             if get_item_by_pos(map, current_x, current_y) == 1{
                 distances[idx] = get_distance(player_x, player_y, current_x, current_y, ray_angle);
@@ -402,8 +404,7 @@ fn calculate_distances(game_map: map::GameMap, orig_current_x: f32, orig_current
     }
     return (distances, hit_poses);
 }
-// current_ray.pos_x = (horizontal_hit_poses[idx].0 as u32 / BLOCKSIZE) as i32;
-// current_ray.pos_y = (horizontal_hit_poses[idx].1 as u32 / BLOCKSIZE) as i32;
+
 
 /// Tests
 #[cfg(test)]
