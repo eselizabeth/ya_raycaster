@@ -6,8 +6,7 @@ use sdl2::video::Window;
 use sdl2::render::{Canvas, Texture};
 use sdl2::keyboard::Scancode;
 pub mod map;
-pub mod texture_1;
-use texture_1::TEXTURE_1;
+
 pub const WINDOW_HEIGHT: u32 = 512;
 pub const WINDOW_WIDTH: u32 = 720;
 
@@ -89,7 +88,7 @@ pub fn move_player(e: &sdl2::EventPump, game: &mut Game){
     if pressed_keys.contains(&Scancode::W){
         game.player.pos_y += game.player.dir_y * PLAYER_SPEED;
         game.player.pos_x += game.player.dir_x * PLAYER_SPEED;
-        if get_item_by_pos(game.game_map.first_level, game.player.pos_x, game.player.pos_y) != 0{
+        if game.game_map.get_level(0, game.player.pos_x, game.player.pos_y) != 0{
             game.player.pos_y -= game.player.dir_y * PLAYER_SPEED;
             game.player.pos_x -= game.player.dir_x * PLAYER_SPEED;
         }
@@ -97,7 +96,7 @@ pub fn move_player(e: &sdl2::EventPump, game: &mut Game){
     else if pressed_keys.contains(&Scancode::S){
         game.player.pos_y -= game.player.dir_y * PLAYER_SPEED;
         game.player.pos_x -= game.player.dir_x * PLAYER_SPEED;
-        if get_item_by_pos(game.game_map.first_level, game.player.pos_x, game.player.pos_y) != 0{
+        if game.game_map.get_level(0, game.player.pos_x, game.player.pos_y) != 0{
             game.player.pos_y += game.player.dir_y * PLAYER_SPEED;
             game.player.pos_x += game.player.dir_x * PLAYER_SPEED;
         }
@@ -124,7 +123,7 @@ pub fn draw_2d_world(canvas: &mut Canvas<Window>, game: Game, gun_textures: &[Te
     canvas.set_draw_color(WHITE);
     for (_, row) in game.game_map.first_level.iter().enumerate() {
         for (_, value) in row.iter().enumerate() {
-            if *value == 1{
+            if *value != 0{
                 canvas.set_draw_color(WHITE);
                 canvas.fill_rect(Rect::new(MINIMAP_OFFSET_X + x_position, MINIMAP_OFFSET_Y + y_position, MINIMAP_BLOCK_SIZE, MINIMAP_BLOCK_SIZE)).expect("Couldn't draw the block");
             }
@@ -152,55 +151,52 @@ pub fn draw_2d_world(canvas: &mut Canvas<Window>, game: Game, gun_textures: &[Te
 }
 
 // Draws the 2.5D world
-pub fn draw_rays(canvas: &mut Canvas<Window>, game: Game){
-
+pub fn draw_rays(canvas: &mut Canvas<Window>, game: Game, textures: &mut[Texture; 4]){
     // Reverse the layers so the first layer will be drawen last
     for (idx, level) in game.rays.iter().rev().enumerate(){
         let level_counter = 2 - idx;
-        let mut x_pos: i32 = 0;
+        let mut x_pos: i16 = WINDOW_WIDTH as i16;
+        let mut last_pos = (-1, -1);
+        let mut buffer_cut: i32 = 64 - RAY_DRAWING_WIDTH as i32;
         for (_, ray) in level.iter().enumerate(){
-            if ray.pos_x == -1 || ray.pos_y == -1 {
-                x_pos += 1;
-                continue;
-            }
+            x_pos -= RAY_DRAWING_WIDTH as i16;
+            if ray.pos_x == -1 || ray.pos_y == -1 {continue;}
 
-            let mut line_height: f32 = (BLOCKSIZE * WINDOW_HEIGHT) as f32 / ray.distance;
-            let mut line_start: f32 = (-line_height / 2_f32) + (WINDOW_HEIGHT / 2) as f32;
-            let mut line_end = (line_height / 2_f32) + (WINDOW_HEIGHT / 2) as f32;
-            if line_end >= WINDOW_HEIGHT as f32{
-                line_end = (WINDOW_HEIGHT - 1) as f32;
+            let line_height = (BLOCKSIZE * WINDOW_HEIGHT) as f32 / ray.distance;
+            let mut line_start = (-line_height / 2_f32) + (WINDOW_HEIGHT / 2) as f32;
+            if line_start < 0_f32 { 
+                line_start = 0_f32;
+            }
+            // let mut line_end = (line_height / 2_f32) + (WINDOW_HEIGHT / 2) as f32;
+            // if line_end >= WINDOW_HEIGHT as f32{
+            //     line_end = (WINDOW_HEIGHT - 1) as f32;
+            // }
+            let mut texture = &textures[0];
+            let texture_no = game.game_map.get_level(level_counter as i32, ray.pos_x as f32, ray.pos_y as f32) as usize;
+            if ray.hit_side == 0{
+                texture = &textures[(texture_no * 2) - 2usize];
+            }
+            else if ray.hit_side == 1{
+                texture = &textures[(texture_no * 2) - 2usize];
+            }
+            if (ray.pos_x, ray.pos_y) == last_pos{
+                buffer_cut -= RAY_DRAWING_WIDTH as i32;
+            }
+            else{
+                buffer_cut = 64 - RAY_DRAWING_WIDTH as i32;
+            }
+            if buffer_cut < 0 {
+                buffer_cut = 64 - RAY_DRAWING_WIDTH as i32;
             }
             // In case the line height is bigger than screen normalize it
             if line_height > WINDOW_HEIGHT as f32{
                line_start = (WINDOW_HEIGHT as f32 - line_height) / 2.0;
-               line_height = WINDOW_HEIGHT as f32;
             }
-            line_start = line_start - line_height * level_counter as f32;
-            if line_start < 0.0{
-                line_start = 0.0;
-            }
-            let mut shade = 1.0;
-            if ray.hit_side == 1{
-                shade = 0.8;
-            }
-            // Drawing
-            let x = ray.pos_x % (BLOCKSIZE / 2) as i32; 
-            let y = ray.pos_y % (BLOCKSIZE / 2) as i32;
-            canvas.set_scale(RAY_DRAWING_WIDTH as f32, 1f32).expect("Couldn't set the scale");
-            let mut y_pos = line_start as i32;
-            let line_end = line_end as i32;
-            while y_pos < line_end{
-                let pixel = ((30 * y + x)*3) as usize;
-                let pixel_red   = TEXTURE_1[pixel+0] as f32 * shade;
-                let pixel_green = TEXTURE_1[pixel+1] as f32 * shade;
-                let pixel_blue  = TEXTURE_1[pixel+2] as f32 * shade;
-                canvas.set_draw_color(Color::RGB(pixel_red as u8, pixel_green as u8, pixel_blue as u8));
-                let point = Point::new(x_pos, y_pos);
-                canvas.draw_point(point).expect("Couldn't draw the pixel");
-                y_pos += 1;
-            }
-            x_pos += 1;
+            let buffer = Rect::new(buffer_cut, 0, RAY_DRAWING_WIDTH, line_height as u32);
+            let position = Rect::new(x_pos as i32, (line_start - line_height * level_counter as f32) as i32, RAY_DRAWING_WIDTH, line_height as u32); // dst
+            canvas.copy(&texture, buffer, position).expect("Couldn't draw the ray");
 
+            last_pos = (ray.pos_x, ray.pos_y);
         }
     }
 }
@@ -215,7 +211,7 @@ pub fn get_rays(game: Game) -> [[Ray; RAY_COUNT]; 3]{
     // ** //
     let mut current_x: f32;
     let mut current_y: f32;
-    let mut ray_angle: f32 = game.player.angle + (RAY_COUNT as f32 / 2.0);
+    let mut ray_angle: f32 = game.player.angle - (RAY_COUNT as f32 / 2.0);
     let mut array_idx: usize = 0;
     // For debug purposes
     if RAY_COUNT == 1{
@@ -274,7 +270,7 @@ pub fn get_rays(game: Game) -> [[Ray; RAY_COUNT]; 3]{
             rays[idx][array_idx] = current_ray;
         }
         
-        ray_angle -= 1.0;
+        ray_angle += 1.0;
         array_idx += 1;
         if array_idx == RAY_COUNT{
             return rays;
@@ -293,7 +289,7 @@ pub fn fire(game: Game) -> Vec<Rect>{
     loop {
         if {(bullet_x > WORLDSIZE as f32 || bullet_y > WORLDSIZE as f32
             || (bullet_x < 0.0 || bullet_y < 0.0))
-            || get_item_by_pos(game.game_map.first_level, bullet_x, bullet_y) != 0} 
+            || game.game_map.get_level(0, bullet_x, bullet_y) != 0} 
         {
             bullets.reverse();
             return bullets;
@@ -358,13 +354,6 @@ fn out_of_index(x_position: f32, y_position: f32) -> bool{
 
 }
 
-// Takes X and Y positions and returns the wall content of GameMaps
-pub fn get_item_by_pos(array: [[i32; crate::MAP_LENGTH]; crate::MAP_WIDTH], x_position: f32, y_position: f32) -> i32{
-    let idx_y: usize = x_position as usize / BLOCKSIZE as usize; // THESE TWO ARE CORRECT
-    let idx_x: usize = y_position as usize / BLOCKSIZE as usize; // DUE TO HOW SDL2 HANDLES X/Y AXIS'
-    return array[idx_x][idx_y];
-}
-
 // Normalizes X and Y position relative to scale of minimap
 fn normalize_for_minimap(pos_x: f32, pos_y: f32) -> (i32, i32){
     return (
@@ -377,13 +366,6 @@ fn calculate_distances(game_map: map::GameMap, orig_current_x: f32, orig_current
     let mut distances: [f32; 3] = [9999.0; 3];
     let mut hit_poses: [(i32, i32); 3] = [(-1, -1); 3];
     for idx in 0..3{
-        let mut map = game_map.first_level;
-        if idx == 1{
-            map = game_map.second_level;
-        }
-        if idx == 2{
-            map = game_map.third_level;
-        }
         let mut current_x = orig_current_x;
         let mut current_y = orig_current_y;
         'inner: loop{
@@ -395,7 +377,7 @@ fn calculate_distances(game_map: map::GameMap, orig_current_x: f32, orig_current
             }
             // println!("Vertical: {}, Level: {}, ray_angle: {}, current_x: {}, current_y: {}, x_step: {}, y_step {}", vertical, idx, ray_angle, current_x, current_y, x_step, y_step);
             if out_of_index(current_x, current_y) {hit_poses[idx] = (-1, -1); break 'inner};
-            if get_item_by_pos(map, current_x, current_y) == 1{
+            if game_map.get_level(idx as i32, current_x, current_y) != 0{
                 distances[idx] = get_distance(player_x, player_y, current_x, current_y, ray_angle);
                 hit_poses[idx] = (current_x as i32, current_y as i32);//((current_x as u32 / BLOCKSIZE) as i32, (current_y as u32 / BLOCKSIZE) as i32);
                 break 'inner;

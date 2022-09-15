@@ -44,6 +44,12 @@ pub fn main() {
     // Textures
     let texture_creator = canvas.texture_creator();
     let mut bullets: Vec<Rect> = Vec::new();
+    let mut game_textures: [sdl2::render::Texture; 4] = [
+        texture_creator.load_texture("assets/textures/block_1.png").expect("Couldn't load texture"),
+        texture_creator.load_texture("assets/textures/block_1_dark.png").expect("Couldn't load texture"),
+        texture_creator.load_texture("assets/textures/block_2.png").expect("Couldn't load texture"),
+        texture_creator.load_texture("assets/textures/block_2_dark.png").expect("Couldn't load texture"),
+    ];
     let mut gun_textures: [sdl2::render::Texture; 3] = [
         texture_creator.load_texture("assets/textures/gun_normal.png").expect("Couldn't load texture"),
         texture_creator.load_texture("assets/textures/gun_fired.png").expect("Couldn't load texture"),
@@ -74,8 +80,7 @@ pub fn main() {
         // ** //
         move_player(&event_pump, &mut game_instance);
         game_instance.rays = get_rays(game_instance);
-        draw_rays(&mut canvas, game_instance);
-        canvas.set_scale(1.0, 1.0).expect("Couldn't scale the canvas");
+        draw_rays(&mut canvas, game_instance, &mut game_textures);
         draw_2d_world(&mut canvas, game_instance, &mut gun_textures);
         if game_instance.player.fired { bullets = fire(game_instance);}
         if !bullets.is_empty(){
