@@ -20,7 +20,8 @@ pub fn main() {
             dir_y: get_deltas(60.0).1,
             fired: false
         },
-        rays: [[Ray::new(); RAY_COUNT], [Ray::new(); RAY_COUNT], [Ray::new(); RAY_COUNT]],
+        wall_rays: [[Ray::new(); RAY_COUNT], [Ray::new(); RAY_COUNT], [Ray::new(); RAY_COUNT]],
+        floor_rays: [Ray::new(); RAY_COUNT],
         game_map: ya_raycaster::map::GAME_MAP
     };
 
@@ -44,7 +45,7 @@ pub fn main() {
     // Textures
     let texture_creator = canvas.texture_creator();
     let mut bullets: Vec<Rect> = Vec::new();
-    let mut game_textures: [sdl2::render::Texture; 4] = [
+    let mut wall_textures: [sdl2::render::Texture; 4] = [
         texture_creator.load_texture("assets/textures/block_1.png").expect("Couldn't load texture"),
         texture_creator.load_texture("assets/textures/block_1_dark.png").expect("Couldn't load texture"),
         texture_creator.load_texture("assets/textures/block_2.png").expect("Couldn't load texture"),
@@ -54,6 +55,9 @@ pub fn main() {
         texture_creator.load_texture("assets/textures/gun_normal.png").expect("Couldn't load texture"),
         texture_creator.load_texture("assets/textures/gun_fired.png").expect("Couldn't load texture"),
         texture_creator.load_texture("assets/textures/bullet.png").expect("Couldn't load texture"),
+    ];
+    let mut floor_textures: [sdl2::render::Texture; 1] = [
+        texture_creator.load_texture("assets/textures/block_3.png").expect("Couldn't load texture"),
     ];
     let mut event_pump = sdl_context.event_pump().unwrap();
     'running: loop {
@@ -79,8 +83,8 @@ pub fn main() {
         canvas.clear();
         // ** //
         move_player(&event_pump, &mut game_instance);
-        game_instance.rays = get_rays(game_instance);
-        draw_rays(&mut canvas, game_instance, &mut game_textures);
+        get_rays(&mut game_instance, &mut canvas);
+        draw_rays(&mut canvas, game_instance, &mut wall_textures, &mut floor_textures);
         draw_2d_world(&mut canvas, game_instance, &mut gun_textures);
         if game_instance.player.fired { bullets = fire(game_instance);}
         if !bullets.is_empty(){

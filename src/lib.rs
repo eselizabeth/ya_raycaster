@@ -6,7 +6,8 @@ use sdl2::video::Window;
 use sdl2::render::{Canvas, Texture};
 use sdl2::keyboard::Scancode;
 pub mod map;
-
+pub mod texture_1;
+use texture_1::TEXTURE_1;
 pub const WINDOW_HEIGHT: u32 = 512;
 pub const WINDOW_WIDTH: u32 = 720;
 
@@ -26,9 +27,9 @@ pub const BLUE: Color =  Color::RGB(0, 0, 255);
 pub const BLOCKSIZE: u32 = 60;
 const PLAYER_SPEED: f32 = 4.0;
 const ROTATION_SPEED: f32 = 3.0;
-pub const RAY_COUNT: usize = 60; // Ray Count must be even
+pub const RAY_COUNT: usize = 90; // Ray Count must be even
 const BULLET_SPEED: f32 = 1.0;
-const RAY_DRAWING_WIDTH: u32 = 12; // Basically WINDOW_WIDTH / RayCount
+const RAY_DRAWING_WIDTH: u32 = 8; // Basically WINDOW_WIDTH / RayCount
 
 const WORLDSIZE: u32 = BLOCKSIZE * MAP_LENGTH as u32;
 
@@ -71,7 +72,8 @@ impl Ray{
 #[derive(Debug, Copy, Clone)]
 pub struct Game{
     pub player: Player,
-    pub rays: [[Ray; RAY_COUNT]; 3],
+    pub wall_rays: [[Ray; RAY_COUNT]; 3],
+    pub floor_rays: [Ray; RAY_COUNT],
     pub game_map: map::GameMap,
 
 }
@@ -151,9 +153,27 @@ pub fn draw_2d_world(canvas: &mut Canvas<Window>, game: Game, gun_textures: &[Te
 }
 
 // Draws the 2.5D world
-pub fn draw_rays(canvas: &mut Canvas<Window>, game: Game, textures: &mut[Texture; 4]){
+pub fn draw_rays(canvas: &mut Canvas<Window>, game: Game, wall_textures: &mut[Texture; 4], floor_textures: &mut[Texture; 1]){
     // Reverse the layers so the first layer will be drawen last
-    for (idx, level) in game.rays.iter().rev().enumerate(){
+    // let mut x_pos: i32 = 0;
+    // let mut y_pos: i32 = 512;
+    // for ray in game.floor_rays{
+    //     let mut ray_height = (BLOCKSIZE * WINDOW_WIDTH) as f32 / ray.distance;
+    //     if ray_height > WINDOW_WIDTH as f32{
+    //         ray_height = WINDOW_WIDTH as f32;
+    //     }
+    //     let mut texture = &floor_textures[0];
+    //     let buffer = Rect::new(0, 0, 4, 4); //src
+    //     let position = Rect::new(x_pos, y_pos, ray_height as u32, RAY_DRAWING_WIDTH as u32); // dst
+    //     canvas.copy(&texture, buffer, position).expect("Couldn't draw the floor ray");
+    //     y_pos -= RAY_DRAWING_WIDTH as i32;
+    //     if y_pos < (WINDOW_HEIGHT as i32 / 2){
+    //         break;
+    //     }
+    // }
+
+
+    for (idx, level) in game.wall_rays.iter().rev().enumerate(){
         let level_counter = 2 - idx;
         let mut x_pos: i16 = WINDOW_WIDTH as i16;
         let mut last_pos = (-1, -1);
@@ -171,15 +191,15 @@ pub fn draw_rays(canvas: &mut Canvas<Window>, game: Game, textures: &mut[Texture
             // if line_end >= WINDOW_HEIGHT as f32{
             //     line_end = (WINDOW_HEIGHT - 1) as f32;
             // }
-            let mut texture = &textures[0];
+            let mut texture = &wall_textures[0];
             let texture_no = game.game_map.get_level(level_counter as i32, ray.pos_x as f32, ray.pos_y as f32) as usize;
             if ray.hit_side == 0{
-                texture = &textures[(texture_no * 2) - 2usize];
+                texture = &wall_textures[(texture_no * 2) - 2usize];
             }
             else if ray.hit_side == 1{
-                texture = &textures[(texture_no * 2) - 2usize];
+                texture = &wall_textures[(texture_no * 2) - 2usize];
             }
-            if (ray.pos_x, ray.pos_y) == last_pos{
+            if (ray.pos_x / BLOCKSIZE as i32, ray.pos_y / BLOCKSIZE as i32) == last_pos{
                 buffer_cut -= RAY_DRAWING_WIDTH as i32;
             }
             else{
@@ -194,16 +214,16 @@ pub fn draw_rays(canvas: &mut Canvas<Window>, game: Game, textures: &mut[Texture
             }
             let buffer = Rect::new(buffer_cut, 0, RAY_DRAWING_WIDTH, line_height as u32);
             let position = Rect::new(x_pos as i32, (line_start - line_height * level_counter as f32) as i32, RAY_DRAWING_WIDTH, line_height as u32); // dst
-            canvas.copy(&texture, buffer, position).expect("Couldn't draw the ray");
-
-            last_pos = (ray.pos_x, ray.pos_y);
+            canvas.copy(&texture, buffer, position).expect("Couldn't draw the wall ray");
+            last_pos = (ray.pos_x / BLOCKSIZE as i32, ray.pos_y / BLOCKSIZE as i32);
         }
     }
+
 }
 
 
 /// Casts rays and returns the ray distance(s) and the side(s) they were hit
-pub fn get_rays(game: Game) -> [[Ray; RAY_COUNT]; 3]{
+pub fn get_rays(game: &mut Game, canvas: &mut Canvas<Window>){
     let mut rays: [[Ray; RAY_COUNT]; 3] = [[Ray::new(); RAY_COUNT], [Ray::new(); RAY_COUNT], [Ray::new(); RAY_COUNT]]; 
     let player_x = game.player.pos_x;
     let player_y = game.player.pos_y;
@@ -211,7 +231,8 @@ pub fn get_rays(game: Game) -> [[Ray; RAY_COUNT]; 3]{
     // ** //
     let mut current_x: f32;
     let mut current_y: f32;
-    let mut ray_angle: f32 = game.player.angle - (RAY_COUNT as f32 / 2.0);
+    let ray_step: f32 = 0.75;
+    let mut ray_angle: f32 = game.player.angle - (RAY_COUNT as f32 / 2.0 * ray_step);
     let mut array_idx: usize = 0;
     // For debug purposes
     if RAY_COUNT == 1{
@@ -253,8 +274,8 @@ pub fn get_rays(game: Game) -> [[Ray; RAY_COUNT]; 3]{
 
         let (vertical_distances, vertical_hit_poses) = calculate_distances(game.game_map, current_x, current_y, x_step, y_step, ray_angle, player_x, player_y, true);
         // Vertical Check end //
+        let mut current_ray = Ray::new();
         for (idx, _) in horizontal_distances.iter().enumerate(){
-            let mut current_ray = Ray::new();
             if horizontal_distances[idx] < vertical_distances[idx]{
                 current_ray.distance = fix_fisheye(player_angle, ray_angle, horizontal_distances[idx]);
                 current_ray.hit_side = 0;
@@ -269,14 +290,31 @@ pub fn get_rays(game: Game) -> [[Ray; RAY_COUNT]; 3]{
             }
             rays[idx][array_idx] = current_ray;
         }
-        
-        ray_angle += 1.0;
+        // let s = current_ray.distance;
+        // let d = s / normalize_angle(ray_angle-player_angle).to_radians().cos();
+        // let texture_x = player_x + ray_angle.to_radians().cos() * d;
+        // let texture_y = player_y - ray_angle.to_radians().sin() * d;
+        // let x = (texture_x as i32 % 30).abs();
+        // let y = (texture_y as i32 % 30).abs();
+        // println!("texture_x {x}, texture_y {y}");
+        // let pixel = ((y * 30 + x)*3) as usize;
+        // let pixel_red   = TEXTURE_1[pixel+0] as f32;
+        // let pixel_green = TEXTURE_1[pixel+1] as f32;
+        // let pixel_blue  = TEXTURE_1[pixel+2] as f32;
+        // canvas.set_draw_color(Color::RGB(pixel_red as u8, pixel_green as u8, pixel_blue as u8));
+        // let point = Point::new(40, 40);
+        // canvas.draw_point(point).expect("Couldn't draw the pixel");
+        ray_angle += ray_step;
         array_idx += 1;
+
+        
         if array_idx == RAY_COUNT{
-            return rays;
+            game.wall_rays = rays;
+            break;
         }
         }
 }
+
 
 pub fn fire(game: Game) -> Vec<Rect>{
     let mut bullets: Vec<Rect> = Vec::new();
