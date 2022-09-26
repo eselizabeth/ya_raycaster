@@ -85,6 +85,7 @@ pub fn main() {
         move_player(&event_pump, &mut game_instance);
         get_rays(&mut game_instance, &mut canvas);
         draw_rays(&mut canvas, game_instance, &mut wall_textures, &mut floor_textures);
+        canvas.set_scale(1.0, 1.0).expect("Couldn't scale the canvas");
         draw_2d_world(&mut canvas, game_instance, &mut gun_textures);
         if game_instance.player.fired { bullets = fire(game_instance);}
         if !bullets.is_empty(){

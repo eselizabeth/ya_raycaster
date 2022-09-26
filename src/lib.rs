@@ -24,7 +24,7 @@ pub const DARK_GREEN: Color =  Color::RGB(0, 100, 0);
 pub const BLUE: Color =  Color::RGB(0, 0, 255);
 
 
-pub const BLOCKSIZE: u32 = 60;
+pub const BLOCKSIZE: u32 = 64;
 const PLAYER_SPEED: f32 = 4.0;
 const ROTATION_SPEED: f32 = 3.0;
 pub const RAY_COUNT: usize = 90; // Ray Count must be even
@@ -52,19 +52,21 @@ pub struct Player{
 
 #[derive(Debug, Copy, Clone)]
 pub struct Ray{
+    pub angle: f32,
     pub distance: f32, // distance between the player and where the ray hit
     pub hit_side: i32, // where the ray hit, 0 if horizontal, 1 if vertical
-    pub pos_x: i32, // x position of ray hit
-    pub pos_y: i32,
+    pub pos_x: f32, // x position of ray hit
+    pub pos_y: f32,
 }
 
 impl Ray{
     pub fn new() -> Ray{
         Ray{
+            angle: -1.0,
             distance: -1.0,
             hit_side: -1,
-            pos_x: -1,
-            pos_y: -1,
+            pos_x: -1.0,
+            pos_y: -1.0,
         }
     }
 
@@ -154,68 +156,66 @@ pub fn draw_2d_world(canvas: &mut Canvas<Window>, game: Game, gun_textures: &[Te
 
 // Draws the 2.5D world
 pub fn draw_rays(canvas: &mut Canvas<Window>, game: Game, wall_textures: &mut[Texture; 4], floor_textures: &mut[Texture; 1]){
-    // Reverse the layers so the first layer will be drawen last
-    // let mut x_pos: i32 = 0;
-    // let mut y_pos: i32 = 512;
-    // for ray in game.floor_rays{
-    //     let mut ray_height = (BLOCKSIZE * WINDOW_WIDTH) as f32 / ray.distance;
-    //     if ray_height > WINDOW_WIDTH as f32{
-    //         ray_height = WINDOW_WIDTH as f32;
-    //     }
-    //     let mut texture = &floor_textures[0];
-    //     let buffer = Rect::new(0, 0, 4, 4); //src
-    //     let position = Rect::new(x_pos, y_pos, ray_height as u32, RAY_DRAWING_WIDTH as u32); // dst
-    //     canvas.copy(&texture, buffer, position).expect("Couldn't draw the floor ray");
-    //     y_pos -= RAY_DRAWING_WIDTH as i32;
-    //     if y_pos < (WINDOW_HEIGHT as i32 / 2){
-    //         break;
-    //     }
-    // }
-
+    canvas.set_scale(RAY_DRAWING_WIDTH as f32, 1f32).expect("Couldn't scale the canvas");
 
     for (idx, level) in game.wall_rays.iter().rev().enumerate(){
         let level_counter = 2 - idx;
-        let mut x_pos: i16 = WINDOW_WIDTH as i16;
-        let mut last_pos = (-1, -1);
-        let mut buffer_cut: i32 = 64 - RAY_DRAWING_WIDTH as i32;
-        for (_, ray) in level.iter().enumerate(){
-            x_pos -= RAY_DRAWING_WIDTH as i16;
-            if ray.pos_x == -1 || ray.pos_y == -1 {continue;}
-
-            let line_height = (BLOCKSIZE * WINDOW_HEIGHT) as f32 / ray.distance;
-            let mut line_start = (-line_height / 2_f32) + (WINDOW_HEIGHT / 2) as f32;
-            if line_start < 0_f32 { 
-                line_start = 0_f32;
-            }
-            // let mut line_end = (line_height / 2_f32) + (WINDOW_HEIGHT / 2) as f32;
-            // if line_end >= WINDOW_HEIGHT as f32{
-            //     line_end = (WINDOW_HEIGHT - 1) as f32;
-            // }
-            let mut texture = &wall_textures[0];
-            let texture_no = game.game_map.get_level(level_counter as i32, ray.pos_x as f32, ray.pos_y as f32) as usize;
-            if ray.hit_side == 0{
-                texture = &wall_textures[(texture_no * 2) - 2usize];
-            }
-            else if ray.hit_side == 1{
-                texture = &wall_textures[(texture_no * 2) - 2usize];
-            }
-            if (ray.pos_x / BLOCKSIZE as i32, ray.pos_y / BLOCKSIZE as i32) == last_pos{
-                buffer_cut -= RAY_DRAWING_WIDTH as i32;
+        let mut x_pos: i16 = 0;
+        for (_, ray) in level.iter().rev().enumerate(){
+            x_pos += 1;
+            if ray.pos_x == -1.0 || ray.pos_y == -1.0 {continue;}
+            // Calculations
+            let mut line_height: i32;
+            if ray.distance >= 1.0{
+                line_height = (BLOCKSIZE as i32 * WINDOW_HEIGHT as i32) / ray.distance as i32;
             }
             else{
-                buffer_cut = 64 - RAY_DRAWING_WIDTH as i32;
+                line_height = WINDOW_HEIGHT as i32;
             }
-            if buffer_cut < 0 {
-                buffer_cut = 64 - RAY_DRAWING_WIDTH as i32;
-            }
+            let y_step: f32 =  32 as f32 / (line_height as f32);
+
+            let mut y_offset: f32 = 0.0;
             // In case the line height is bigger than screen normalize it
-            if line_height > WINDOW_HEIGHT as f32{
-               line_start = (WINDOW_HEIGHT as f32 - line_height) / 2.0;
+            if line_height > WINDOW_HEIGHT as i32{
+                y_offset = line_height as f32 - (WINDOW_HEIGHT / 2) as f32;
+                line_height =  WINDOW_HEIGHT as i32;
             }
-            let buffer = Rect::new(buffer_cut, 0, RAY_DRAWING_WIDTH, line_height as u32);
-            let position = Rect::new(x_pos as i32, (line_start - line_height * level_counter as f32) as i32, RAY_DRAWING_WIDTH, line_height as u32); // dst
-            canvas.copy(&texture, buffer, position).expect("Couldn't draw the wall ray");
-            last_pos = (ray.pos_x / BLOCKSIZE as i32, ray.pos_y / BLOCKSIZE as i32);
+
+            let mut line_start: i32 = (-line_height / 2) + (WINDOW_HEIGHT / 2) as i32;
+
+            let mut x: f32 = 0.0;
+            let mut y: f32 = y_step * y_offset;
+            let mut shade = 1.0;
+            if ray.hit_side == 1{
+                shade = 0.7;
+                x = (ray.pos_y / 2.0) % 32.0;
+                if ray.angle > 180.0{
+                    x = 31.0 - x;
+                }
+            }
+            else if ray.hit_side == 0{
+                x = (ray.pos_x / 2.0) % 32.0;
+                if ray.angle > 90.0 && ray.angle < 270.0{
+                    x = 31.0 - x;
+                }
+            }
+            //println!("line_height {}, line_start: {}",line_height, line_start);
+
+            // Drawing
+            for y_pos in 0..line_height as i32{
+                let pixel = ((y as i32 * 32 + x as i32) * 3) as usize;
+                //println!("x: {x} - y: {y}, pixel: {pixel}");
+                let red = TEXTURE_1[pixel] as f32 * shade;
+                let green = TEXTURE_1[pixel + 1] as f32 * shade;
+                let blue = TEXTURE_1[pixel + 2] as f32* shade;
+
+                canvas.set_draw_color(Color::RGB(red as u8, green as u8, blue as u8));
+                let point = Point::new(x_pos as i32, y_pos + line_start as i32);
+                canvas.draw_point(point).expect("Couldn't draw point");
+                y += y_step;
+                y = y % 32 as f32;
+
+            }
         }
     }
 
@@ -275,6 +275,7 @@ pub fn get_rays(game: &mut Game, canvas: &mut Canvas<Window>){
         let (vertical_distances, vertical_hit_poses) = calculate_distances(game.game_map, current_x, current_y, x_step, y_step, ray_angle, player_x, player_y, true);
         // Vertical Check end //
         let mut current_ray = Ray::new();
+        current_ray.angle = ray_angle;
         for (idx, _) in horizontal_distances.iter().enumerate(){
             if horizontal_distances[idx] < vertical_distances[idx]{
                 current_ray.distance = fix_fisheye(player_angle, ray_angle, horizontal_distances[idx]);
@@ -290,20 +291,6 @@ pub fn get_rays(game: &mut Game, canvas: &mut Canvas<Window>){
             }
             rays[idx][array_idx] = current_ray;
         }
-        // let s = current_ray.distance;
-        // let d = s / normalize_angle(ray_angle-player_angle).to_radians().cos();
-        // let texture_x = player_x + ray_angle.to_radians().cos() * d;
-        // let texture_y = player_y - ray_angle.to_radians().sin() * d;
-        // let x = (texture_x as i32 % 30).abs();
-        // let y = (texture_y as i32 % 30).abs();
-        // println!("texture_x {x}, texture_y {y}");
-        // let pixel = ((y * 30 + x)*3) as usize;
-        // let pixel_red   = TEXTURE_1[pixel+0] as f32;
-        // let pixel_green = TEXTURE_1[pixel+1] as f32;
-        // let pixel_blue  = TEXTURE_1[pixel+2] as f32;
-        // canvas.set_draw_color(Color::RGB(pixel_red as u8, pixel_green as u8, pixel_blue as u8));
-        // let point = Point::new(40, 40);
-        // canvas.draw_point(point).expect("Couldn't draw the pixel");
         ray_angle += ray_step;
         array_idx += 1;
 
@@ -392,17 +379,17 @@ fn out_of_index(x_position: f32, y_position: f32) -> bool{
 
 }
 
-// Normalizes X and Y position relative to scale of minimap
+/// Normalizes X and Y position relative to scale of minimap
 fn normalize_for_minimap(pos_x: f32, pos_y: f32) -> (i32, i32){
     return (
     MINIMAP_OFFSET_X + (pos_x / (MINIMAP_BLOCK_SIZE ) as f32) as i32,
     MINIMAP_OFFSET_Y +(pos_y / (MINIMAP_BLOCK_SIZE ) as f32) as i32);
 }
 
-// Calculates distances of each level, if it doesn't hit an array returns distance of 9999 and hit poses of (-1.0, -1.0)
-fn calculate_distances(game_map: map::GameMap, orig_current_x: f32, orig_current_y: f32, x_step: f32, y_step: f32, ray_angle: f32, player_x: f32, player_y: f32, vertical: bool) -> ([f32; 3], [(i32, i32); 3]) {
+/// Calculates distances of each level, if it doesn't hit an array returns distance of 9999 and hit poses of (-1.0, -1.0)
+fn calculate_distances(game_map: map::GameMap, orig_current_x: f32, orig_current_y: f32, x_step: f32, y_step: f32, ray_angle: f32, player_x: f32, player_y: f32, vertical: bool) -> ([f32; 3], [(f32, f32); 3]) {
     let mut distances: [f32; 3] = [9999.0; 3];
-    let mut hit_poses: [(i32, i32); 3] = [(-1, -1); 3];
+    let mut hit_poses: [(f32, f32); 3] = [(-1.0, -1.0); 3];
     for idx in 0..3{
         let mut current_x = orig_current_x;
         let mut current_y = orig_current_y;
@@ -414,10 +401,10 @@ fn calculate_distances(game_map: map::GameMap, orig_current_x: f32, orig_current
                 if ray_angle == 180.0 || normalize_angle(ray_angle) == 0.0 {break 'inner};
             }
             // println!("Vertical: {}, Level: {}, ray_angle: {}, current_x: {}, current_y: {}, x_step: {}, y_step {}", vertical, idx, ray_angle, current_x, current_y, x_step, y_step);
-            if out_of_index(current_x, current_y) {hit_poses[idx] = (-1, -1); break 'inner};
+            if out_of_index(current_x, current_y) {hit_poses[idx] = (-1.0, -1.0); break 'inner};
             if game_map.get_level(idx as i32, current_x, current_y) != 0{
                 distances[idx] = get_distance(player_x, player_y, current_x, current_y, ray_angle);
-                hit_poses[idx] = (current_x as i32, current_y as i32);//((current_x as u32 / BLOCKSIZE) as i32, (current_y as u32 / BLOCKSIZE) as i32);
+                hit_poses[idx] = (current_x, current_y);//((current_x as u32 / BLOCKSIZE) as i32, (current_y as u32 / BLOCKSIZE) as i32);
                 break 'inner;
             }
             current_x += x_step;

@@ -8,8 +8,8 @@ pub struct GameMap{
 
 impl GameMap{
     pub fn get_level(&self, idx: i32, pos_x: f32, pos_y: f32) -> i32{
-    let idx_y = pos_x as usize / 60 as usize;
-    let idx_x = pos_y as usize / 60 as usize;
+    let idx_y = pos_x as usize / 64 as usize;
+    let idx_x = pos_y as usize / 64 as usize;
     if idx == 0{
         return self.first_level[idx_x][idx_y];
     }
